@@ -1,6 +1,7 @@
 package org.apache.beam.io.cdc;
 
 import io.debezium.connector.mysql.MySqlConnector;
+import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.document.Document;
 import io.debezium.document.DocumentReader;
 import io.debezium.document.DocumentWriter;
@@ -197,23 +198,21 @@ public class CounterSourceConnectorTest {
     public void testDebeziumIOSqlSever() {
         PipelineOptions options = PipelineOptionsFactory.create();
         Pipeline p = Pipeline.create(options);
-        p.apply(
-                DebeziumIO.<String>read().
+        p.apply(DebeziumIO.<String>read().
                         withConnectorConfiguration(
                                 DebeziumIO.ConnectorConfiguration.create()
-                                        .withUsername("debezium")
-                                        .withPassword("dbz")
-                                        .withConnectorClass(MySqlConnector.class)
+                                        .withUsername("sa")
+                                        .withPassword("Password!")
+                                        .withConnectorClass(SqlServerConnector.class)
                                         .withHostName("127.0.0.1")
-                                        .withPort("3306")
-                                        .withConnectionProperty("database.server.id", "184054")
-                                        .withConnectionProperty("database.server.name", "dbserver1")
-                                        .withConnectionProperty("database.include.list", "inventory")
+                                        .withPort("1433")
+                                        .withConnectionProperty("database.dbname", "testDB")
+                                        .withConnectionProperty("database.server.name", "server1")
+                                        .withConnectionProperty("table.include.list", "dbo.customers")
                                         .withConnectionProperty("database.history", SDFDatabaseHistory.class.getName())
                                         .withConnectionProperty("include.schema.changes", "false")
                         ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
         ).setCoder(StringUtf8Coder.of());
-        //.apply(TextIO.write().to("test"));
 
         p.run().waitUntilFinish();
     }
