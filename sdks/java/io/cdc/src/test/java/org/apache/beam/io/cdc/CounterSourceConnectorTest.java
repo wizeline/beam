@@ -2,6 +2,7 @@ package org.apache.beam.io.cdc;
 
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.sqlserver.SqlServerConnector;
+import io.debezium.connector.postgresql.PostgresConnector;
 import io.debezium.document.Document;
 import io.debezium.document.DocumentReader;
 import io.debezium.document.DocumentWriter;
@@ -193,6 +194,30 @@ public class CounterSourceConnectorTest {
 
 	  p.run().waitUntilFinish();
   }
+  
+    @Test
+    public void testDebeziumIOPostgreSql() {
+        PipelineOptions options = PipelineOptionsFactory.create();
+        Pipeline p = Pipeline.create(options);
+        p.apply(DebeziumIO.<String>read().
+                withConnectorConfiguration(
+                        DebeziumIO.ConnectorConfiguration.create()
+                                .withUsername("postgres")
+                                .withPassword("debezium")
+                                .withConnectorClass(PostgresConnector.class)
+                                .withHostName("127.0.0.1")
+                                .withPort("5000")
+                                .withConnectionProperty("database.dbname", "postgres")
+                                .withConnectionProperty("database.server.name", "dbserver2")
+                                .withConnectionProperty("schema.include.list", "inventory")
+                                .withConnectionProperty("slot.name", "dbzslot2")
+                                .withConnectionProperty("database.history", SDFDatabaseHistory.class.getName())
+                                .withConnectionProperty("include.schema.changes", "false")
+                ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+        ).setCoder(StringUtf8Coder.of());
+
+        p.run().waitUntilFinish();
+    }
 
     @Test
     public void testDebeziumIOSqlSever() {
