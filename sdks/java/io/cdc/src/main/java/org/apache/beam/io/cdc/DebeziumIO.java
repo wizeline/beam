@@ -55,7 +55,7 @@ public class DebeziumIO {
 
 		abstract @Nullable ConnectorConfiguration getConnectorConfiguration();
 		
-		abstract @Nullable SerializableFunction<SourceRecord, T> getFormatFunction();
+		abstract @Nullable SourceRecordMapper<T> getFormatFunction();
 
 		abstract @Nullable Coder<T> getCoder();
 
