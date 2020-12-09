@@ -66,7 +66,7 @@ public class DebeziumIO {
 
 			abstract Builder<T> setConnectorConfiguration(ConnectorConfiguration config);
 			abstract Builder<T> setCoder(Coder<T> coder);
-			abstract Builder<T> setFormatFunction(SerializableFunction<SourceRecord, T> mapperFn);
+			abstract Builder<T> setFormatFunction(SourceRecordMapper<T> mapperFn);
 			abstract Read<T> build();
 			  
 		}
@@ -77,7 +77,7 @@ public class DebeziumIO {
 			return toBuilder().setConnectorConfiguration(config).build();
 		}
 		
-		public Read<T> withFormatFunction(SerializableFunction<SourceRecord, T> mapperFn) {
+		public Read<T> withFormatFunction(SourceRecordMapper<T> mapperFn) {
 			checkArgument(mapperFn != null, "mapperFn can not be null");
 			return toBuilder().setFormatFunction(mapperFn).build();
 		}

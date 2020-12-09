@@ -192,5 +192,30 @@ public class CounterSourceConnectorTest {
 
 	  p.run().waitUntilFinish();
   }
+
+    @Test
+    public void testDebeziumIOSqlSever() {
+        PipelineOptions options = PipelineOptionsFactory.create();
+        Pipeline p = Pipeline.create(options);
+        p.apply(
+                DebeziumIO.<String>read().
+                        withConnectorConfiguration(
+                                DebeziumIO.ConnectorConfiguration.create()
+                                        .withUsername("debezium")
+                                        .withPassword("dbz")
+                                        .withConnectorClass(MySqlConnector.class)
+                                        .withHostName("127.0.0.1")
+                                        .withPort("3306")
+                                        .withConnectionProperty("database.server.id", "184054")
+                                        .withConnectionProperty("database.server.name", "dbserver1")
+                                        .withConnectionProperty("database.include.list", "inventory")
+                                        .withConnectionProperty("database.history", SDFDatabaseHistory.class.getName())
+                                        .withConnectionProperty("include.schema.changes", "false")
+                        ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+        ).setCoder(StringUtf8Coder.of());
+        //.apply(TextIO.write().to("test"));
+
+        p.run().waitUntilFinish();
+    }
   
 }
