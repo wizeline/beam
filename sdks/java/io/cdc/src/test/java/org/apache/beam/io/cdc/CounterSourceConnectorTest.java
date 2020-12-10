@@ -185,10 +185,7 @@ public class CounterSourceConnectorTest {
 							.withConnectionProperty("database.include.list", "inventory")
 							.withConnectionProperty("database.history", SDFDatabaseHistory.class.getName())
 							.withConnectionProperty("include.schema.changes", "false")
-              ).withFormatFunction(record -> {
-		          System.out.println("GOT RECORD - " + record.toString());
-		          return record.toString();
-		        })
+              ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
       ).setCoder(StringUtf8Coder.of());
 	  //.apply(TextIO.write().to("test"));
 

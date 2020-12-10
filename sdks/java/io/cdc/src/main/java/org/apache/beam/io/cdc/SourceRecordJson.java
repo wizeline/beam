@@ -29,16 +29,27 @@ public class SourceRecordJson {
 
     private Metadata loadMetadata() {
         Struct source = (Struct) this.value.get("source");
+        String schema;
+
+        System.out.println("VALUE - " + this.value);
 
         if(source == null) {
             return null;
+        }
+
+        try {
+            // PostgreSQL and SQL server use Schema
+            schema = source.getString("schema");
+        } catch (DataException e) {
+            // MySQL uses file instead
+            schema = source.getString("file");
         }
 
         return new Metadata(source.getString("connector"),
                 source.getString("version"),
                 source.getString("name"),
                 source.getString("db"),
-                source.getString("schema"),
+                schema,
                 source.getString("table"));
     }
 
