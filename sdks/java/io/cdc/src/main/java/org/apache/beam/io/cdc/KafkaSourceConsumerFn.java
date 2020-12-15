@@ -25,9 +25,15 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.joda.time.DateTime;
 import org.joda.time.Duration;
+import org.joda.time.Instant;
+import org.joda.time.Minutes;
 
 public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
+
+  private static long minutesToRun = 2; // Pass this as parameter ??
+  private static DateTime startTime;
 
   static class OffsetHolder implements Serializable {
     @Nullable
@@ -43,6 +49,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
 
     OffsetHolder restriction;
     boolean done = false;
+    long toMillis = 60 * 1000;
 
     OffsetTracker(OffsetHolder holder) {
       this.restriction = holder;
@@ -51,8 +58,11 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     @Override
     public boolean tryClaim(Map<String, Object> position) {
       System.out.println("Claiming " + position.toString() + " used to have: " + String.format("%s", restriction.offset));
+      DateTime currentTime = new DateTime();
+      long elapsedTime = currentTime.getMillis() - KafkaSourceConsumerFn.startTime.getMillis();
+      System.out.println("TIME RUNNING: " + elapsedTime + " / " + KafkaSourceConsumerFn.minutesToRun * toMillis);
       this.restriction = new OffsetHolder(position, this.restriction.history);
-      return true;
+      return elapsedTime < (KafkaSourceConsumerFn.minutesToRun * toMillis);
     }
 
     @Override
@@ -92,11 +102,14 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
 
   @GetInitialRestriction
   public OffsetHolder getInitialRestriction(@Element Map<String, String> unused) throws IOException {
+    // First run
+    KafkaSourceConsumerFn.startTime = new DateTime();
     return new OffsetHolder(null, null);
   }
 
   @NewTracker
   public RestrictionTracker<OffsetHolder, Map<String, Object>> newTracker(@Restriction OffsetHolder restriction) {
+    System.out.println("NEW TRACKER!! " + restriction.offset);
     return new OffsetTracker(restriction);
   }
 
