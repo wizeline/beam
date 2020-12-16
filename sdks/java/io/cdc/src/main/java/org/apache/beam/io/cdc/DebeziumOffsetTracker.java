@@ -29,7 +29,7 @@ public class DebeziumOffsetTracker extends RestrictionTracker<DebeziumOffsetHold
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumOffsetTracker.class);
 
     private DebeziumOffsetHolder restriction;
-    long toMillis = 60 * 1000;
+    private static final long MILLIS = 60 * 1000;
 
     DebeziumOffsetTracker(DebeziumOffsetHolder holder) {
         this.restriction = holder;
@@ -38,11 +38,13 @@ public class DebeziumOffsetTracker extends RestrictionTracker<DebeziumOffsetHold
     @Override
     public boolean tryClaim(Map<String, Object> position) {
         LOG.info("-------------- Claiming {} used to have: {}", position, restriction.offset);
-        DateTime currentTime = new DateTime();
-        long elapsedTime = currentTime.getMillis() - KafkaSourceConsumerFn.startTime.getMillis();
-        LOG.info("-------------- Time running: {} / {}", elapsedTime, (KafkaSourceConsumerFn.minutesToRun * toMillis));
+        long elapsedTime = System.currentTimeMillis() - KafkaSourceConsumerFn.startTime.getMillis();
+        LOG.info("-------------- Time running: {} / {}", elapsedTime, (KafkaSourceConsumerFn.minutesToRun * MILLIS));
         this.restriction = new DebeziumOffsetHolder(position, this.restriction.history);
-        return elapsedTime < (KafkaSourceConsumerFn.minutesToRun * toMillis);
+        if (KafkaSourceConsumerFn.minutesToRun < 0) {
+            return true;
+        }
+        return elapsedTime < (KafkaSourceConsumerFn.minutesToRun * MILLIS);
     }
 
     @Override
