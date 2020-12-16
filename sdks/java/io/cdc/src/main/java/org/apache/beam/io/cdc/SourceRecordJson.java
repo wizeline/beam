@@ -29,11 +29,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class SourceRecordJson {
-    private SourceRecord sourceRecord;
-    private Struct value;
+    private final SourceRecord sourceRecord;
+    private final Struct value;
     private final Event event;
 
     public SourceRecordJson(SourceRecord sourceRecord) {
+        if (sourceRecord == null) {
+            throw new IllegalArgumentException();
+        }
+
         this.sourceRecord = sourceRecord;
         this.value = (Struct) sourceRecord.value();
 
@@ -45,10 +49,13 @@ public class SourceRecordJson {
     }
 
     private Metadata loadMetadata() {
-        Struct source = (Struct) this.value.get("source");
+        Struct source;
+        try {
+            source = (Struct) this.value.get("source");
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException();
+        }
         String schema;
-
-        System.out.println("VALUE - " + this.value);
 
         if(source == null) {
             return null;
