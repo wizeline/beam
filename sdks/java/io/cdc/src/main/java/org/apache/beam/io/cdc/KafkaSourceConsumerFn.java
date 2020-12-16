@@ -109,6 +109,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
       LOG.info("------------ Record found: {}", record);
 
       Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
+
       if (offset == null || !tracker.tryClaim(offset)) {
         restrictionTrackers.remove(this.getHashCode());
         return ProcessContinuation.stop();
