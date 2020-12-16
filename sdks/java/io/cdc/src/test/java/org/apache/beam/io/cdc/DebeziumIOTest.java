@@ -33,7 +33,7 @@ public class DebeziumIOTest implements Serializable {
             .withConnectionProperty("database.server.id", "184054")
             .withConnectionProperty("database.server.name", "dbserver1")
             .withConnectionProperty("database.include.list", "inventory")
-            .withConnectionProperty("database.history", CounterSourceConnectorTest.SDFDatabaseHistory.class.getName())
+            .withConnectionProperty("database.history", DebeziumHistory.class.getName())
             .withConnectionProperty("include.schema.changes", "false");
 //    @Rule public final transient TestPipeline pipeline = TestPipeline.create();
 //    @Rule public final transient ExpectedLogs expectedLogs = ExpectedLogs.none(DebeziumIO.class);
