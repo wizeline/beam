@@ -1,196 +1,138 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.beam.io.cdc;
 
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
+import org.apache.beam.sdk.coders.Coder;
+import org.apache.beam.sdk.coders.SerializableCoder;
+import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
+import org.joda.time.DateTime;
+import org.joda.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.Serializable;
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.annotation.Nullable;
-import org.apache.beam.sdk.coders.Coder;
-import org.apache.beam.sdk.coders.SerializableCoder;
-import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.SerializableFunction;
-import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
-import org.apache.beam.sdk.transforms.splittabledofn.SplitResult;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.source.SourceRecord;
-import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.source.SourceTaskContext;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
-import org.joda.time.Duration;
 
+/**
+ *
+ * @param <T>
+ */
 public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaSourceConsumerFn.class);
+    public static final String BEAM_INSTANCE_PROPERTY = "beam.parent.instance";
 
-  static class OffsetHolder implements Serializable {
-    @Nullable
-    public final Map<String, ? extends Object> offset;
-    public final List<? extends Object> history;
-    OffsetHolder(@Nullable Map<String, ? extends Object> offset, @Nullable List<? extends Object> history) {
-      this.offset = offset;
-      this.history = history == null ? new ArrayList<>() : history;
-    }
-  }
+    public static long minutesToRun = -1;
+    public static DateTime startTime;
 
-  static class OffsetTracker extends RestrictionTracker<OffsetHolder, Map<String, Object>> {
+    private final Class<? extends SourceConnector> connectorClass;
+    private final SourceRecordMapper<T> fn;
+    protected static final Map<String, RestrictionTracker<DebeziumOffsetHolder,  Map<String, Object>>>
+    restrictionTrackers = new ConcurrentHashMap<>();
 
-    OffsetHolder restriction;
-    boolean done = false;
-
-    OffsetTracker(OffsetHolder holder) {
-      this.restriction = holder;
+    public KafkaSourceConsumerFn(Class<?> connectorClass, SourceRecordMapper<T> fn, long minutesToRun) {
+        this.connectorClass = (Class<? extends SourceConnector>) connectorClass;
+        this.fn = fn;
+        KafkaSourceConsumerFn.minutesToRun = minutesToRun;
     }
 
-    @Override
-    public boolean tryClaim(Map<String, Object> position) {
-      System.out.println("Claiming " + position.toString() + " used to have: " + String.format("%s", restriction.offset));
-      this.restriction = new OffsetHolder(position, this.restriction.history);
-      return true;
+    public KafkaSourceConsumerFn(Class<?> connectorClass, SourceRecordMapper<T> fn) {
+        this.connectorClass = (Class<? extends SourceConnector>) connectorClass;
+        this.fn = fn;
     }
 
-    @Override
-    public OffsetHolder currentRestriction() {
-      return restriction;
+    @GetInitialRestriction
+    public DebeziumOffsetHolder getInitialRestriction(@Element Map<String, String> unused) throws IOException {
+        KafkaSourceConsumerFn.startTime = new DateTime();
+        return new DebeziumOffsetHolder(null, null);
     }
 
-    @Override
-    public @org.checkerframework.checker.nullness.qual.Nullable SplitResult<OffsetHolder> trySplit(
-        double fractionOfRemainder) {
-      System.out.println("Trying to split");
-      return SplitResult.of(new OffsetHolder(null, null), restriction);
+    @NewTracker
+    public RestrictionTracker<DebeziumOffsetHolder, Map<String, Object>> newTracker(@Restriction DebeziumOffsetHolder restriction) {
+        return new DebeziumOffsetTracker(restriction);
     }
 
-    @Override
-    public void checkDone() throws IllegalStateException {
-      return;
+    @GetRestrictionCoder
+    public Coder<DebeziumOffsetHolder> getRestrictionCoder() {
+        return SerializableCoder.of(DebeziumOffsetHolder.class);
     }
 
-    @Override
-    public IsBounded isBounded() {
-      return IsBounded.BOUNDED;
-    }
-  }
+    @DoFn.ProcessElement
+    public ProcessContinuation process(@Element Map<String, String> element,
+                                       RestrictionTracker<DebeziumOffsetHolder,
+                                               Map<String, Object>> tracker,
+                                       OutputReceiver<T> receiver) throws Exception {
+        Map<String, String> configuration = new HashMap<>(element);
 
-  public static final String BEAM_INSTANCE_PROPERTY = "beam.parent.instance";
-  private final Class<? extends SourceConnector> connectorClass;
-  private final SourceRecordMapper<T> fn;
-  protected static final Map<String, RestrictionTracker<OffsetHolder,  Map<String, Object>>>
-      restrictionTrackers = new ConcurrentHashMap<>();
+        // Adding the current restriction to the class object to be found by the database history
+        restrictionTrackers.put(this.getHashCode(), tracker);
+        configuration.put(BEAM_INSTANCE_PROPERTY, this.getHashCode());
 
-  KafkaSourceConsumerFn(Class<?> connectorClass,
-		  SourceRecordMapper<T> fn) {
-    this.connectorClass = (Class<? extends SourceConnector>) connectorClass;
-    this.fn = fn;
-  }
+        SourceConnector connector = connectorClass.getDeclaredConstructor().newInstance();
+        connector.start(configuration);
 
-  @GetInitialRestriction
-  public OffsetHolder getInitialRestriction(@Element Map<String, String> unused) throws IOException {
-    return new OffsetHolder(null, null);
-  }
+        SourceTask task = (SourceTask) connector.taskClass().getDeclaredConstructor().newInstance();
 
-  @NewTracker
-  public RestrictionTracker<OffsetHolder, Map<String, Object>> newTracker(@Restriction OffsetHolder restriction) {
-    return new OffsetTracker(restriction);
-  }
+        task.initialize(new DebeziumBeamSourceTaskContext(tracker.currentRestriction().offset));
+        task.start(connector.taskConfigs(1).get(0));
 
-  @GetRestrictionCoder
-  public Coder<OffsetHolder> getRestrictionCoder() {
-    return SerializableCoder.of(OffsetHolder.class);
-  }
+        List<SourceRecord> records = task.poll();
+        if (records == null) {
+            LOG.info("----------- No records found");
 
-  @DoFn.ProcessElement
-  public ProcessContinuation process(
-      @Element Map<String, String> element,
-      RestrictionTracker<OffsetHolder, Map<String, Object>> tracker,
-      OutputReceiver<T> receiver)
-      throws Exception {
-    Map<String, String> configuration = new HashMap<>(element);
-    // Adding the current restriction to the class object to be found by the database history
-    restrictionTrackers.put(Integer.toString(System.identityHashCode(this)), tracker);
-    configuration.put(BEAM_INSTANCE_PROPERTY,
-        Integer.toString(System.identityHashCode(this)));
-    SourceConnector conn = connectorClass.getDeclaredConstructor().newInstance();
-    conn.start(configuration);
+            restrictionTrackers.remove(this.getHashCode());
+            return ProcessContinuation.stop();
+        }
 
-    SourceTask task = (SourceTask) conn.taskClass().getDeclaredConstructor().newInstance();
-    Map<String, String> taskConfig = conn.taskConfigs(1).get(0);
+        if (records.size() == 0) {
+            restrictionTrackers.remove(this.getHashCode());
+            return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
+        }
 
-    System.out.println("CALL PROCESS!!");
-    task.initialize(new BeamSourceTaskContext(tracker.currentRestriction().offset));
-    task.start(taskConfig);
+        for (SourceRecord record : records) {
+            LOG.info("------------ Record found: {}", record);
 
-    List<SourceRecord> records = task.poll();
-    if (records == null) {
-      // At this point, the source is done.
-      System.out.println("DONESO BECAUSE NULL");
-      restrictionTrackers.remove(Integer.toString(System.identityHashCode(this)));
-      return ProcessContinuation.stop();
-    }
-    if (records.size() == 0) {
-      restrictionTrackers.remove(Integer.toString(System.identityHashCode(this)));
-      return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
-    }
-    for (SourceRecord record : records) {
-      Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
-      if (offset != null && tracker.tryClaim(offset)) {
-    	  T json = this.fn.mapSourceRecord(record);
-        System.out.println("RECEIVED SOME " + json);
-        receiver.output(json);
-      } else {
-        System.out.println("DONE BECAUSE NULL OFFSET or CANT CLAIM!");
-        // We're done.
-        restrictionTrackers.remove(Integer.toString(System.identityHashCode(this)));
-        return ProcessContinuation.stop();
-      }
-    }
-    System.out.println("WE SHOULD RESUME IN A BIT!");
-    restrictionTrackers.remove(Integer.toString(System.identityHashCode(this)));
-    return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
-  }
+            Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
 
-  private static class BeamSourceTaskContext implements SourceTaskContext {
-    private Map<String, ? extends Object> initialOffset;
-    BeamSourceTaskContext(@Nullable Map<String, ? extends Object> initialOffset) {
-      this.initialOffset = initialOffset;
-    }
-    @Override
-    public Map<String, String> configs() {
-      // TODO(pabloem): Do we need to implement this?
-      throw new UnsupportedOperationException("unimplemented");
+            if (offset == null || !tracker.tryClaim(offset)) {
+                restrictionTrackers.remove(this.getHashCode());
+                return ProcessContinuation.stop();
+            }
+
+            T json = this.fn.mapSourceRecord(record);
+            LOG.info("****************** RECEIVED SOURCE AS JSON: {}", json);
+
+            receiver.output(json);
+        }
+
+        LOG.info("WE SHOULD RESUME IN A BIT!");
+
+        restrictionTrackers.remove(this.getHashCode());
+        return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
     }
 
-    @Override
-    public OffsetStorageReader offsetStorageReader() {
-      System.out.println("Creating an offset storage reader");
-      return new SourceOffsetStorageReader(initialOffset);
+    public String getHashCode() {
+        return Integer.toString(System.identityHashCode(this));
     }
-  }
-
-  private static class SourceOffsetStorageReader implements OffsetStorageReader {
-    private Map<String, ?> offset;
-    SourceOffsetStorageReader(Map<String, ?> initialOffset) {
-      this.offset = initialOffset;
-    }
-    @Override
-    public <V> Map<String, Object> offset(Map<String, V> partition) {
-      return offsets(Collections.singletonList(partition)).getOrDefault(partition, ImmutableMap.of());
-    }
-
-    @Override
-    public <T> Map<Map<String, T>, Map<String, Object>> offsets(Collection<Map<String, T>> partitions) {
-      System.out.println("GETTING OFFSETS!");
-      Map<Map<String, T>, Map<String, Object>> map = new HashMap<>();
-      for (Map<String, T> p : partitions) {
-        map.put(p, (Map<String, Object>) offset);
-      }
-      return map;
-    }
-  }
 }

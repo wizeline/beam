@@ -21,8 +21,8 @@ public class DebeziumHistoryTest {
     public void beforeEach() throws Exception {
         source = Collect.hashMapOf("server", "my-server");
         setLogPosition(0);
-        KafkaSourceConsumerFn.OffsetHolder restriction = new KafkaSourceConsumerFn.OffsetHolder(null, null);
-        KafkaSourceConsumerFn.OffsetTracker tracker = new KafkaSourceConsumerFn.OffsetTracker(restriction);
+        DebeziumOffsetHolder restriction = new DebeziumOffsetHolder(null, null);
+        DebeziumOffsetTracker tracker = new DebeziumOffsetTracker(restriction);
         KafkaSourceConsumerFn.restrictionTrackers.put(Integer.toString(System.identityHashCode(this)), tracker);
         history = new DebeziumHistory(KafkaSourceConsumerFn.restrictionTrackers);
     }
