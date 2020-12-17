@@ -1,17 +1,13 @@
 package org.apache.beam.io.cdc;
 
-import io.debezium.document.DocumentWriter;
 import io.debezium.relational.Tables;
 import io.debezium.relational.ddl.DdlParserSql2003;
 import io.debezium.relational.ddl.LegacyDdlParser;
-import io.debezium.relational.history.HistoryRecord;
-import io.debezium.text.ParsingException;
 import io.debezium.util.Collect;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.junit.Assert.*;
@@ -47,40 +43,6 @@ public class DebeziumHistoryTest {
     public void shouldStartWithEmptyListAndStoreDataAndRecoverAllState() throws Exception {
         testHistoryContent();
     }
-
-//    @Test(expected = ParsingException.class)
-//    public void shouldStopOnUnparseableSQL() throws Exception {
-//        // Create invalid records
-//        final String invalidSQL = "xxxDROP TABLE foo;";
-//
-//        history.record(source, position, "db1", invalidSQL);
-//
-//        testHistoryContent();
-//    }
-
-    /*@Test
-    public void shouldIgnoreUnparseableMessages() throws Exception {
-        // Create invalid records
-        final String nullRecord = null;
-        final String emptyRecord = "";
-        final String noSourceRecord = "{\"position\":{\"filename\":\"my-txn-file.log\",\"position\":39},\"databaseName\":\"db1\",\"ddl\":\"DROP TABLE foo;\"}";
-        final String noPositionRecord = "{\"source\":{\"server\":\"my-server\"},\"databaseName\":\"db1\",\"ddl\":\"DROP TABLE foo;\"}");
-        final String invalidJSONRecord1 = "{\"source\":{\"server\":\"my-server\"},\"position\":{\"filename\":\"my-txn-file.log\",\"position\":39},\"databaseName\":\"db1\",\"ddl\":\"DROP TABLE foo;\"");
-        final String invalidJSONRecord2 = "\"source\":{\"server\":\"my-server\"},\"position\":{\"filename\":\"my-txn-file.log\",\"position\":39},\"databaseName\":\"db1\",\"ddl\":\"DROP TABLE foo;\"}");
-        final String invalidSQL = "{\"source\":{\"server\":\"my-server\"},\"position\":{\"filename\":\"my-txn-file.log\",\"position\":39},\"databaseName\":\"db1\",\"ddl\":\"xxxDROP TABLE foo;\"}");
-
-        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(intruderConfig.asProperties())) {
-            producer.send(nullRecord).get();
-            producer.send(emptyRecord).get();
-            producer.send(noSourceRecord).get();
-            producer.send(noPositionRecord).get();
-            producer.send(invalidJSONRecord1).get();
-            producer.send(invalidJSONRecord2).get();
-            producer.send(invalidSQL).get();
-        }
-
-        testHistoryContent();
-    }*/
 
     @Test
     public void testExists() {
