@@ -66,7 +66,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
  *
  *      PipelineOptions options = PipelineOptionsFactory.create();
  *      Pipeline p = Pipeline.create(options);
- *      p.apply(DebeziumIO.<String>read()
+ *      p.apply(DebeziumIO.read()
  *               .withConnectorConfiguration(mySqlConnectorConfig)
  *               .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
  *       ).setCoder(StringUtf8Coder.of());
