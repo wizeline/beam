@@ -44,6 +44,34 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 /**
  * Utility class which exposes an implementation {@link #read} and a Debezium configuration.
+ *
+ * <h3>Quick Overview</h3>
+ * <p>This class lets Beam users connect to their existing Debezium implementations in an easy way.</p>
+ *
+ * <h3>Usage example</h3>
+ * <p>Connect to a Debezium - MySQL database and run a Pipeline</p>
+ * <pre>
+ *     private static final ConnectorConfiguration mySqlConnectorConfig = ConnectorConfiguration
+ *             .create()
+ *             .withUsername("uname")
+ *             .withPassword("pwd123")
+ *             .withHostName("127.0.0.1")
+ *             .withPort("3306")
+ *             .withConnectorClass(MySqlConnector.class)
+ *             .withConnectionProperty("database.server.id", "184054")
+ *             .withConnectionProperty("database.server.name", "serverid")
+ *             .withConnectionProperty("database.include.list", "dbname")
+ *             .withConnectionProperty("database.history", DebeziumSDFDatabaseHistory.class.getName())
+ *             .withConnectionProperty("include.schema.changes", "false");
+ *
+ *      PipelineOptions options = PipelineOptionsFactory.create();
+ *      Pipeline p = Pipeline.create(options);
+ *      p.apply(DebeziumIO.<String>read()
+ *               .withConnectorConfiguration(mySqlConnectorConfig)
+ *               .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+ *       ).setCoder(StringUtf8Coder.of());
+ *       p.run().waitUntilFinish();
+ * </pre>
  */
 public class DebeziumIO {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumIO.class);
@@ -167,15 +195,15 @@ public class DebeziumIO {
         /**
          * Applies the connectorClass to be used to connect to your database.
          *
-         * <p>Currently supported connectors are:
+         * <p>Currently supported connectors are:</p>
          * <ul>
          *     <li>{@link io.debezium.connector.mysql.MySqlConnector}</li>
          *     <li>{@link io.debezium.connector.postgresql.PostgresConnector}</li>
          *     <li>{@link io.debezium.connector.sqlserver.SqlServerConnector }</li>
          * </ul>
-         * </p>
          *
-         * @param connectorClass
+         *
+         * @param connectorClass Any of the supported connectors.
          * @return {@link ConnectorConfiguration}
          */
         public ConnectorConfiguration withConnectorClass(Class<?> connectorClass) {
@@ -186,13 +214,13 @@ public class DebeziumIO {
         /**
          * Sets the connectorClass to be used to connect to your database. It cannot be null.
          *
-         * <p>Currently supported connectors are:
+         * <p>Currently supported connectors are:</p>
          * <ul>
          *     <li>{@link io.debezium.connector.mysql.MySqlConnector}</li>
          *     <li>{@link io.debezium.connector.postgresql.PostgresConnector}</li>
          *     <li>{@link io.debezium.connector.sqlserver.SqlServerConnector }</li>
          * </ul>
-         * </p>
+         *
          *
          * @param connectorClass (as ValueProvider)
          * @return {@link ConnectorConfiguration}
@@ -249,7 +277,7 @@ public class DebeziumIO {
         /**
          * Sets the username to connect to your database. It cannot be null.
          *
-         * @param username
+         * @param username Database username
          * @return {@link ConnectorConfiguration}
          */
         public ConnectorConfiguration withUsername(String username) {
@@ -271,7 +299,7 @@ public class DebeziumIO {
         /**
          * Sets the password to connect to your database. It cannot be null.
          *
-         * @param password
+         * @param password Database password
          * @return {@link ConnectorConfiguration}
          */
         public ConnectorConfiguration withPassword(String password) {
@@ -293,16 +321,15 @@ public class DebeziumIO {
         /**
          * Sets a custom property to be used within the connection to your database.
          *
-         * <p>
-         *     You may use this to set special configurations such as:
+         * <p>You may use this to set special configurations such as:</p>
          *     <ul>
          *         <li>slot.name</li>
          *         <li>database.dbname</li>
          *         <li>database.server.id</li>
          *         <li>...</li>
          *     </ul>
-         * </p>
-         * @param connectionProperties
+         *
+         * @param connectionProperties Properties (Key, Value) Map
          * @return {@link ConnectorConfiguration}
          */
         public ConnectorConfiguration withConnectionProperties(Map<String,String> connectionProperties) {
@@ -313,15 +340,13 @@ public class DebeziumIO {
         /**
          * Sets a custom property to be used within the connection to your database.
          *
-         * <p>
-         *     You may use this to set special configurations such as:
+         * <p>You may use this to set special configurations such as:</p>
          *     <ul>
          *         <li>slot.name</li>
          *         <li>database.dbname</li>
          *         <li>database.server.id</li>
          *         <li>...</li>
          *     </ul>
-         * </p>
          * @param connectionProperties (as ValueProvider).
          * @return {@link ConnectorConfiguration}
          */
@@ -333,15 +358,13 @@ public class DebeziumIO {
         /**
          * Sets a custom property to be used within the connection to your database.
          *
-         * <p>
-         *     You may use this to set special configurations such as:
+         * <p>You may use this to set special configurations such as:</p>
          *     <ul>
          *         <li>slot.name</li>
          *         <li>database.dbname</li>
          *         <li>database.server.id</li>
          *         <li>...</li>
          *     </ul>
-         * </p>
          * @param key Property name
          * @param value Property value
          * @return {@link ConnectorConfiguration}
@@ -359,7 +382,7 @@ public class DebeziumIO {
         /**
          * Sets the {@link SourceConnector} to be used. It cannot be null.
          *
-         * @param sourceConnector
+         * @param sourceConnector Any supported connector
          * @return {@link ConnectorConfiguration}
          */
         public ConnectorConfiguration withSourceConnector(SourceConnector sourceConnector) {
