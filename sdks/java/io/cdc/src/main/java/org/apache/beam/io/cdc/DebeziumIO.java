@@ -18,9 +18,15 @@
 package org.apache.beam.io.cdc;
 
 import com.google.auto.value.AutoValue;
+
+import io.debezium.connector.sqlserver.SqlServerConnector;
+
+import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.MapCoder;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.options.ValueProvider;
 import org.apache.beam.sdk.transforms.Create;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -38,8 +44,47 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.sql.DataSource;
+
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 
+/**
+ * {@link PTransform}s for reading from <a
+ * href="https://debezium.io/documentation/reference/connectors/index.html">Debezium</a> connector.
+ * 
+ * <p>DebeziumIO source returns a unbounded collection of {@code T} as a {@code PCollection<T>}. T is the
+ * type returned by the provided {@link SourceRecordMapper}.
+ * 
+ * <p>To configure the DebeziumIO source, you have to provide a {@link ConnectorConfiguration} using<br>
+ * {@link ConnectorConfiguration#create()}.
+ * Optionally, {@link DataSourceConfiguration#withUsername(String)} and {@link
+ * DataSourceConfiguration#withPassword(String)} allows you to define username and password.
+ *
+ * <p>For example:
+ *
+ * <pre>{@code
+ * PipelineOptions options = PipelineOptionsFactory.create();
+ * Pipeline p = Pipeline.create(options);
+ *       p.apply(DebeziumIO.<String>read().
+ *               withConnectorConfiguration(
+ *                       DebeziumIO.ConnectorConfiguration.create()
+ *                               .withUsername("sa")
+ *                               .withPassword("Password!")
+ *                               .withConnectorClass(SqlServerConnector.class)
+ *                               .withHostName("127.0.0.1")
+ *                               .withPort("1433")
+ *                               .withConnectionProperty("database.dbname", "testDB")
+ *                               .withConnectionProperty("database.server.name", "server1")
+ *                               .withConnectionProperty("table.include.list", "dbo.customers")
+ *                               .withConnectionProperty("include.schema.changes", "false"))
+ *               .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+ *               .withCoder(StringUtf8Coder.of())
+ *       );
+ * }</pre>
+ * 
+ * Make sure Debezium connector is present in the classpath.
+ *
+ */
 public class DebeziumIO {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumIO.class);
 
