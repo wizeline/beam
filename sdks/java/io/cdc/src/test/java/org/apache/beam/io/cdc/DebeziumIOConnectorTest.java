@@ -141,10 +141,8 @@ public class DebeziumIOConnectorTest {
                                         .withConnectionProperty("database.cdcschema", "ASNCDC")
                                         .withConnectionProperty("database.include.list", "TESTDB")
                                         .withConnectionProperty("table.include.list", "DB2INST1.CUSTOMERS")
-                                        //.withConnectionProperty("database.history", SDFDatabaseHistory.class.getName())
                                         .withConnectionProperty("database.history", FileDatabaseHistory.class.getName())
                                         .withConnectionProperty("database.history.file.filename", "file2-history.dat")
-                                        //.withConnectionProperty("database.history", MemoryDatabaseHistory.class.getName())
                         ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
         ).setCoder(StringUtf8Coder.of());
 
