@@ -126,7 +126,7 @@ public class DebeziumIOConnectorTest {
     public void testDebeziumIOdb2() {
         PipelineOptions options = PipelineOptionsFactory.create();
         Pipeline p = Pipeline.create(options);
-        p.apply(DebeziumIO.<String>read().
+        p.apply(DebeziumIO.readAsJson().
                         withConnectorConfiguration(
                                 DebeziumIO.ConnectorConfiguration.create()
                                         .withUsername("db2inst1")
@@ -143,7 +143,7 @@ public class DebeziumIOConnectorTest {
                                         .withConnectionProperty("table.include.list", "DB2INST1.CUSTOMERS")
                                         .withConnectionProperty("database.history", FileDatabaseHistory.class.getName())
                                         .withConnectionProperty("database.history.file.filename", "file2-history.dat")
-                        ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+                        )
         ).setCoder(StringUtf8Coder.of());
 
         p.run().waitUntilFinish();
