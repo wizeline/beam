@@ -47,7 +47,8 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
  *
  * <h3>Quick Overview</h3>
  * <p>This class lets Beam users connect to their existing Debezium implementations in an easy way.</p>
- * <p>Currently the supported Debezium Connectors are:</p>
+ * <p>Any Kafka connector supported by Debezium should work fine with this IO.</p>
+ * <p>The following connectors were tested and worked well in some simple scenarios:</p>
  * <ul>
  *     <li>MySQL</li>
  *     <li>PostgreSQL</li>
