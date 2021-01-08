@@ -47,6 +47,13 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
  *
  * <h3>Quick Overview</h3>
  * <p>This class lets Beam users connect to their existing Debezium implementations in an easy way.</p>
+ * <p>Currently the supported Debezium Connectors are:</p>
+ * <ul>
+ *     <li>MySQL</li>
+ *     <li>PostgreSQL</li>
+ *     <li>SQLServer</li>
+ *     <li>DB2</li>
+ * </ul>
  *
  * <h3>Usage example</h3>
  * <p>Connect to a Debezium - MySQL database and run a Pipeline</p>
@@ -72,6 +79,13 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
  *       ).setCoder(StringUtf8Coder.of());
  *       p.run().waitUntilFinish();
  * </pre>
+ * <p>In this example we are using {@link DebeziumSDFDatabaseHistory} to handle the Database history.</p>
+ *
+ * <h3>Dependencies</h3>
+ * <p>User may work with any of the supported Debezium Connectors above mentioned</p>
+ * <p>
+ *     See <a href="https://debezium.io/documentation/reference/1.3/connectors/index.html">Debezium Connectors</a> for more info.
+ * </p>
  */
 public class DebeziumIO {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumIO.class);
