@@ -18,6 +18,7 @@
 package org.apache.beam.io.cdc;
 
 import com.google.auto.value.AutoValue;
+
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.MapCoder;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
