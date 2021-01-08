@@ -28,11 +28,43 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * This class can be used as a mapper for each {@link SourceRecord} retrieved.
+ *
+ * <h3>What it does</h3>
+ * <p>It maps any SourceRecord retrieved from any supported {@link io.debezium.connector} to JSON</p>
+ *
+ * <h3>How it works</h3>
+ * <p>It will extract valuable fields from any given SourceRecord:</p>
+ * <ul>
+ *     <li>before - {@link #loadBefore}</li>
+ *     <li>after - {@link #loadAfter}</li>
+ *     <li>metadata - {@link #loadMetadata}
+ *          <ul>
+ *              <li>schema - Database Schema</li>
+ *              <li>connector - Connector used</li>
+ *              <li>version - Connector version</li>
+ *          </ul>
+ *     </li>
+ * </ul>
+ *
+ * <h3>Usage Example</h3>
+ * <p>Map each SourceRecord to JSON</p>
+ * <pre>
+ *     DebeziumIO.read()
+ *         .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper()
+ * </pre>
+ */
+
 public class SourceRecordJson {
     private final SourceRecord sourceRecord;
     private final Struct value;
     private final Event event;
 
+    /**
+     * Initializer
+     * @param sourceRecord retrieved SourceRecord using a supported SourceConnector
+     */
     public SourceRecordJson(SourceRecord sourceRecord) {
         if (sourceRecord == null) {
             throw new IllegalArgumentException();
@@ -41,13 +73,21 @@ public class SourceRecordJson {
         this.sourceRecord = sourceRecord;
         this.value = (Struct) sourceRecord.value();
 
-        Metadata metadata = this.loadMetadata();
-        Before before = this.loadBefore();
-        After after = this.loadAfter();
+        if (this.value == null) {
+            this.event = new Event(null, null, null);
+        } else {
+            Metadata metadata = this.loadMetadata();
+            Before before = this.loadBefore();
+            After after = this.loadAfter();
 
-        this.event = new Event(metadata, before, after);
+            this.event = new Event(metadata, before, after);
+        }
     }
 
+    /**
+     * Extracts metadata from the SourceRecord
+     * @return Metadata
+     */
     private Metadata loadMetadata() {
         Struct source;
         try {
@@ -77,6 +117,10 @@ public class SourceRecordJson {
                 source.getString("table"));
     }
 
+    /**
+     * Extracts the before field within SourceRecord
+     * @return Before
+     */
     private Before loadBefore() {
         Struct before;
         try {
@@ -96,6 +140,10 @@ public class SourceRecordJson {
         return new Before(fields);
     }
 
+    /**
+     * Extracts the after field within SourceRecord
+     * @return After
+     */
     private After loadAfter() {
         Struct after;
         try {
@@ -115,10 +163,17 @@ public class SourceRecordJson {
         return new After(fields);
     }
 
+    /**
+     * Transforms the extracted data to a JSON string
+     * @return JSON String
+     */
     public String toJson() {
         return this.event.toJson();
     }
 
+    /**
+     * {@link SourceRecordJson implementation}
+     */
     public static class SourceRecordJsonMapper implements SourceRecordMapper<String> {
 
         @Override
@@ -128,23 +183,39 @@ public class SourceRecordJson {
     }
 }
 
+/**
+ * Depicts a SourceRecord as an Event in order for it to be mapped as JSON
+ */
 class Event implements Serializable {
     private final Metadata metadata;
     private final Before before;
     private final After after;
 
+    /**
+     * Event Initializer
+     * @param metadata Metadata retrieved from SourceRecord
+     * @param before Before data retrieved from SourceRecord
+     * @param after After data retrieved from SourceRecord
+     */
     public Event(Metadata metadata, Before before, After after) {
         this.metadata = metadata;
         this.before = before;
         this.after = after;
     }
 
+    /**
+     * Transforms the Event to a JSON string
+     * @return JSON String
+     */
     public String toJson() {
         Gson gson = new GsonBuilder().serializeNulls().create();
         return gson.toJson(this);
     }
 }
 
+/**
+ * Depicts the metadata within a SourceRecord. It has valuable fields.
+ */
 class Metadata implements Serializable {
     private final String connector;
     private final String version;
@@ -153,6 +224,15 @@ class Metadata implements Serializable {
     private final String schema;
     private final String table;
 
+    /**
+     * Metadata Initializer
+     * @param connector Connector used
+     * @param version Connector version
+     * @param name
+     * @param database DB name
+     * @param schema Schema name
+     * @param table Table name
+     */
     public Metadata(String connector, String version, String name, String database, String schema, String table) {
         this.connector = connector;
         this.version = version;
@@ -163,17 +243,31 @@ class Metadata implements Serializable {
     }
 }
 
+/**
+ * Depicts the before field within SourceRecord
+ */
 class Before implements Serializable {
     private final Map<String, Object> fields;
 
+    /**
+     * Before Initializer
+     * @param fields Key - Value map with information within Before
+     */
     public Before(Map<String, Object> fields) {
         this.fields = fields;
     }
 }
 
+/**
+ * Depicts the after field within SourceRecord
+ */
 class After implements Serializable {
     private final Map<String, Object> fields;
 
+    /**
+     * After Initializer
+     * @param fields Key - Value map with information within After
+     */
     public After(Map<String, Object> fields) {
         this.fields = fields;
     }

@@ -25,28 +25,53 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/**
+ * {@link RestrictionTracker} for Debezium connectors
+ */
 public class DebeziumOffsetTracker extends RestrictionTracker<DebeziumOffsetHolder, Map<String, Object>> {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumOffsetTracker.class);
 
     private DebeziumOffsetHolder restriction;
     private static final long MILLIS = 60 * 1000;
+    private final Integer maxRecords = 10;
 
     DebeziumOffsetTracker(DebeziumOffsetHolder holder) {
         this.restriction = holder;
     }
 
+    /**
+     * Overriding {@link #tryClaim} in order to stop fetching records from the database.
+     *
+     * <p>This works on two different ways:</p>
+     * <h3>Number of records</h3>
+     * <p>
+     *     This is the default behavior.
+     *     Once the specified number of records has been reached, it will stop fetching them.
+     * </p>
+     * <h3>Time based</h3>
+     * </p>
+     *     User may specify the amount of time the connector to be kept alive.
+     *     Please see {@link KafkaSourceConsumerFn} for more details on this.
+     * </p>
+     *
+     *
+     * @param position Currently not used
+     * @return boolean
+     */
     @Override
     public boolean tryClaim(Map<String, Object> position) {
         LOG.debug("-------------- Claiming {} used to have: {}", position, restriction.offset);
         long elapsedTime = System.currentTimeMillis() - KafkaSourceConsumerFn.startTime.getMillis();
+        int fetchedRecords = this.restriction.fetchedRecords == null ? 0 : this.restriction.fetchedRecords + 1;
         LOG.debug("-------------- Time running: {} / {}", elapsedTime, (KafkaSourceConsumerFn.minutesToRun * MILLIS));
-        this.restriction = new DebeziumOffsetHolder(position, this.restriction.history);
+        this.restriction = new DebeziumOffsetHolder(position, this.restriction.history, fetchedRecords);
+        LOG.debug("-------------- History: {}", this.restriction.history);
         if (KafkaSourceConsumerFn.minutesToRun < 0) {
-            return true;
+            return fetchedRecords < maxRecords;
         }
         return elapsedTime < (KafkaSourceConsumerFn.minutesToRun * MILLIS);
     }
-
+    
     @Override
     public DebeziumOffsetHolder currentRestriction() {
         return restriction;
@@ -56,7 +81,7 @@ public class DebeziumOffsetTracker extends RestrictionTracker<DebeziumOffsetHold
     public SplitResult<DebeziumOffsetHolder> trySplit(double fractionOfRemainder) {
         LOG.debug("-------------- Trying to split: fractionOfRemainder={}", fractionOfRemainder);
 
-        return SplitResult.of(new DebeziumOffsetHolder(null, null), restriction);
+        return SplitResult.of(new DebeziumOffsetHolder(null, null, null), restriction);
     }
 
     @Override

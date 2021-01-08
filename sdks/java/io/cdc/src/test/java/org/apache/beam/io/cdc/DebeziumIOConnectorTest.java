@@ -31,8 +31,23 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+/**
+ * DebeziumIO Tester
+ *
+ * <p>
+ *     Tests the three different Connectors.
+ *     Requires each environment (MySQL, PostgreSQL, SQLServer) already set up.
+ * </p>
+ */
 @RunWith(JUnit4.class)
 public class DebeziumIOConnectorTest {
+    /**
+     * Debezium - MySQL connector Test
+     *
+     * <p>
+     *     Tests that connector can actually connect to the database
+     * </p>
+     */
   @Test
   public void testDebeziumIOMySql() {
 	  PipelineOptions options = PipelineOptionsFactory.create();
@@ -48,13 +63,21 @@ public class DebeziumIOConnectorTest {
 							.withConnectionProperty("database.server.id", "184054")
 							.withConnectionProperty("database.server.name", "dbserver1")
 							.withConnectionProperty("database.include.list", "inventory")
-							.withConnectionProperty("include.schema.changes", "false")
-              ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
-      ).setCoder(StringUtf8Coder.of());
+							.withConnectionProperty("include.schema.changes", "false"))
+              .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+              .withCoder(StringUtf8Coder.of())
+      );
 
 	  p.run().waitUntilFinish();
   }
-  
+
+    /**
+     * Debezium - PostgreSQL connector Test
+     *
+     * <p>
+     *     Tests that connector can actually connect to the database
+     * </p>
+     */
     @Test
     public void testDebeziumIOPostgreSql() {
         PipelineOptions options = PipelineOptionsFactory.create();
@@ -71,13 +94,21 @@ public class DebeziumIOConnectorTest {
                                 .withConnectionProperty("database.server.name", "dbserver2")
                                 .withConnectionProperty("schema.include.list", "inventory")
                                 .withConnectionProperty("slot.name", "dbzslot2")
-                                .withConnectionProperty("include.schema.changes", "false")
-                ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
-        ).setCoder(StringUtf8Coder.of());
+                                .withConnectionProperty("include.schema.changes", "false"))
+                .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+                .withCoder(StringUtf8Coder.of())
+        );
 
         p.run().waitUntilFinish();
     }
 
+    /**
+     * Debezium - SQLServer connector Test
+     *
+     * <p>
+     *     Tests that connector can actually connect to the database
+     * </p>
+     */
     @Test
     public void testDebeziumIOSqlSever() {
         PipelineOptions options = PipelineOptionsFactory.create();

@@ -36,8 +36,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * <h3>Quick Overview</h3>
+ * SDF used to process records fetched from supported Debezium Connectors.
  *
- * @param <T>
+ * Currently it has a time limiter (see {@link DebeziumOffsetTracker}) which, if set,
+ * it will stop automatically after the specified elapsed minutes. Otherwise, it will keep
+ * running until the user explicitly interrupts it.
+ *
+ * It might be initialized either as:
+ * <pre>KafkaSourceConsumerFn(connectorClass, SourceRecordMapper)</pre>
+ * Or with a time limiter:
+ * <pre>KafkaSourceConsumerFn(connectorClass, SourceRecordMapper, minutesToRun)</pre>
  */
 public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaSourceConsumerFn.class);
@@ -51,12 +60,23 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     protected static final Map<String, RestrictionTracker<DebeziumOffsetHolder,  Map<String, Object>>>
     restrictionTrackers = new ConcurrentHashMap<>();
 
+    /**
+     * Initializes the SDF with a time limit.
+     * @param connectorClass Supported Debezium connector class
+     * @param fn a SourceRecordMapper
+     * @param minutesToRun Maximum time to run (in minutes)
+     */
     public KafkaSourceConsumerFn(Class<?> connectorClass, SourceRecordMapper<T> fn, long minutesToRun) {
         this.connectorClass = (Class<? extends SourceConnector>) connectorClass;
         this.fn = fn;
         KafkaSourceConsumerFn.minutesToRun = minutesToRun;
     }
 
+    /**
+     * Initializes the SDF to be run indefinitely.
+     * @param connectorClass Supported Debezium connector class
+     * @param fn a SourceRecordMapper
+     */
     public KafkaSourceConsumerFn(Class<?> connectorClass, SourceRecordMapper<T> fn) {
         this.connectorClass = (Class<? extends SourceConnector>) connectorClass;
         this.fn = fn;
@@ -65,7 +85,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     @GetInitialRestriction
     public DebeziumOffsetHolder getInitialRestriction(@Element Map<String, String> unused) throws IOException {
         KafkaSourceConsumerFn.startTime = new DateTime();
-        return new DebeziumOffsetHolder(null, null);
+        return new DebeziumOffsetHolder(null, null, null);
     }
 
     @NewTracker
@@ -78,6 +98,14 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
         return SerializableCoder.of(DebeziumOffsetHolder.class);
     }
 
+    /**
+     * Process the retrieved element. Currently it just logs the retrieved record as JSON.
+     * @param element Record retrieved
+     * @param tracker Restriction Tracker
+     * @param receiver Output Receiver
+     * @return
+     * @throws Exception
+     */
     @DoFn.ProcessElement
     public ProcessContinuation process(@Element Map<String, String> element,
                                        RestrictionTracker<DebeziumOffsetHolder,
