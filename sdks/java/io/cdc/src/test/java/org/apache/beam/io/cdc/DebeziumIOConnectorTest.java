@@ -17,9 +17,12 @@
  */
 package org.apache.beam.io.cdc;
 
+import io.debezium.connector.db2.Db2Connector;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.postgresql.PostgresConnector;
 import io.debezium.connector.sqlserver.SqlServerConnector;
+import io.debezium.relational.history.FileDatabaseHistory;
+
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
 import org.apache.beam.sdk.options.PipelineOptions;
@@ -60,9 +63,10 @@ public class DebeziumIOConnectorTest {
 							.withConnectionProperty("database.server.id", "184054")
 							.withConnectionProperty("database.server.name", "dbserver1")
 							.withConnectionProperty("database.include.list", "inventory")
-							.withConnectionProperty("include.schema.changes", "false")
-              ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
-      ).setCoder(StringUtf8Coder.of());
+							.withConnectionProperty("include.schema.changes", "false"))
+              .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+              .withCoder(StringUtf8Coder.of())
+      );
 
 	  p.run().waitUntilFinish();
   }
@@ -90,9 +94,10 @@ public class DebeziumIOConnectorTest {
                                 .withConnectionProperty("database.server.name", "dbserver2")
                                 .withConnectionProperty("schema.include.list", "inventory")
                                 .withConnectionProperty("slot.name", "dbzslot2")
-                                .withConnectionProperty("include.schema.changes", "false")
-                ).withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
-        ).setCoder(StringUtf8Coder.of());
+                                .withConnectionProperty("include.schema.changes", "false"))
+                .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+                .withCoder(StringUtf8Coder.of())
+        );
 
         p.run().waitUntilFinish();
     }
@@ -147,4 +152,32 @@ public class DebeziumIOConnectorTest {
 
         p.run().waitUntilFinish();
     }
+    
+    @Test
+    public void testDebeziumIOdb2() {
+        PipelineOptions options = PipelineOptionsFactory.create();
+        Pipeline p = Pipeline.create(options);
+        p.apply(DebeziumIO.readAsJson().
+                        withConnectorConfiguration(
+                                DebeziumIO.ConnectorConfiguration.create()
+                                        .withUsername("db2inst1")
+                                        .withPassword("=Password!")
+                                        .withConnectorClass(Db2Connector.class)
+                                        .withHostName("127.0.0.1")
+                                        .withPort("50000")
+                                        .withConnectionProperty("database.dbname", "TESTDB")
+                                        .withConnectionProperty("tasks.max", "1")
+                                        .withConnectionProperty("database.hostname","db2server")
+                                        .withConnectionProperty("database.server.name", "db2server")
+                                        .withConnectionProperty("database.cdcschema", "ASNCDC")
+                                        .withConnectionProperty("database.include.list", "TESTDB")
+                                        .withConnectionProperty("table.include.list", "DB2INST1.CUSTOMERS")
+                                        .withConnectionProperty("database.history", FileDatabaseHistory.class.getName())
+                                        .withConnectionProperty("database.history.file.filename", "file2-history.dat")
+                        )
+        ).setCoder(StringUtf8Coder.of());
+
+        p.run().waitUntilFinish();
+    }
+
 }
