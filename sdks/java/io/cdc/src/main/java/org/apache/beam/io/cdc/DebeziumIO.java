@@ -123,6 +123,7 @@ public class DebeziumIO {
     public abstract static class Read<T> extends PTransform<PBegin, PCollection<T>> {
 
         private static final long serialVersionUID = 1L;
+        private int maxNumberOfRecords = 10;
 
         abstract @Nullable ConnectorConfiguration getConnectorConfiguration();
         abstract @Nullable SourceRecordMapper<T> getFormatFunction();
@@ -176,7 +177,7 @@ public class DebeziumIO {
                             .withCoder(MapCoder.of(StringUtf8Coder.of(), StringUtf8Coder.of())))
                     .apply(ParDo.of(new KafkaSourceConsumerFn<>(
                             getConnectorConfiguration().getConnectorClass().get(),
-                            getFormatFunction())))
+                            getFormatFunction(), maxNumberOfRecords)))
                     .setCoder(getCoder());
         }
     }
