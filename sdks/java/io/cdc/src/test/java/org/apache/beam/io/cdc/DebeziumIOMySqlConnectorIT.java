@@ -5,6 +5,8 @@ import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
+import org.apache.beam.sdk.testing.PAssert;
+import org.apache.beam.sdk.values.PCollection;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -14,6 +16,10 @@ import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
+
+import static org.apache.beam.sdk.testing.SerializableMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
+
 
 @RunWith(JUnit4.class)
 public class DebeziumIOMySqlConnectorIT {
@@ -25,14 +31,13 @@ public class DebeziumIOMySqlConnectorIT {
    * </p>
    */
   @ClassRule
-  public MySQLContainer<?> mySQLContainer = new MySQLContainer<>(
+  public static final MySQLContainer<?> mySQLContainer = new MySQLContainer<>(
       DockerImageName.parse("debezium/example-mysql:1.4")
           .asCompatibleSubstituteFor("mysql")
   )
-      .withUsername("mysqluser")
-      .withDatabaseName("inventory")
-      .withExposedPorts(3306)
       .withPassword("debezium")
+      .withUsername("mysqluser")
+      .withExposedPorts(3306)
       .waitingFor(
           new HttpWaitStrategy()
               .forPort(3306)
@@ -56,7 +61,7 @@ public class DebeziumIOMySqlConnectorIT {
 
     PipelineOptions options = PipelineOptionsFactory.create();
     Pipeline p = Pipeline.create(options);
-    p.apply(DebeziumIO.<String>read().
+    PCollection<String> results = p.apply(DebeziumIO.<String>read().
         withConnectorConfiguration(
             DebeziumIO.ConnectorConfiguration.create()
                 .withUsername("debezium")
@@ -71,6 +76,12 @@ public class DebeziumIOMySqlConnectorIT {
         .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
         .withCoder(StringUtf8Coder.of())
     );
+    String expected = "{\"metadata\":{\"connector\":\"mysql\",\"version\":\"1.3.1.Final\",\"name\":\"dbserver1\",\"database\":\"inventory\",\"schema\":\"mysql-bin.000003\",\"table\":\"addresses\"},\"before\":null,\"after\":{\"fields\":{\"zip\":\"76036\",\"city\":\"Euless\",\"street\":\"3183 Moore Avenue\",\"id\":10,\"state\":\"Texas\",\"customer_id\":1001,\"type\":\"SHIPPING\"}}}";
+
+    PAssert.that(results).satisfies((Iterable<String> res) -> {
+      assertThat(res, hasItem(expected));
+      return null;
+    });
 
     p.run().waitUntilFinish();
     mySQLContainer.stop();
