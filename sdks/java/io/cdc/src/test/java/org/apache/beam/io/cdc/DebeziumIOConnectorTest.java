@@ -18,11 +18,10 @@
 package org.apache.beam.io.cdc;
 
 import io.debezium.connector.db2.Db2Connector;
-import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.postgresql.PostgresConnector;
 import io.debezium.connector.sqlserver.SqlServerConnector;
-import io.debezium.relational.history.FileDatabaseHistory;
 
+import io.debezium.relational.history.FileDatabaseHistory;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
 import org.apache.beam.sdk.options.PipelineOptions;
@@ -41,36 +40,6 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class DebeziumIOConnectorTest {
-    /**
-     * Debezium - MySQL connector Test
-     *
-     * <p>
-     *     Tests that connector can actually connect to the database
-     * </p>
-     */
-  @Test
-  public void testDebeziumIOMySql() {
-	  PipelineOptions options = PipelineOptionsFactory.create();
-	  Pipeline p = Pipeline.create(options);
-	  p.apply(DebeziumIO.<String>read().
-              withConnectorConfiguration(
-						DebeziumIO.ConnectorConfiguration.create()
-							.withUsername("debezium")
-							.withPassword("dbz")
-							.withConnectorClass(MySqlConnector.class)
-							.withHostName("127.0.0.1")
-							.withPort("3306")
-							.withConnectionProperty("database.server.id", "184054")
-							.withConnectionProperty("database.server.name", "dbserver1")
-							.withConnectionProperty("database.include.list", "inventory")
-							.withConnectionProperty("include.schema.changes", "false"))
-              .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
-              .withCoder(StringUtf8Coder.of())
-      );
-
-	  p.run().waitUntilFinish();
-  }
-
     /**
      * Debezium - PostgreSQL connector Test
      *
