@@ -64,10 +64,16 @@ public class DebeziumOffsetTracker extends RestrictionTracker<DebeziumOffsetHold
         LOG.debug("-------------- Time running: {} / {}", elapsedTime, (KafkaSourceConsumerFn.minutesToRun * MILLIS));
         this.restriction = new DebeziumOffsetHolder(position, this.restriction.history, fetchedRecords);
         LOG.debug("-------------- History: {}", this.restriction.history);
-        if (KafkaSourceConsumerFn.minutesToRun < 0) {
+
+        if (KafkaSourceConsumerFn.maxRecords == null && KafkaSourceConsumerFn.minutesToRun == -1) {
+            return true;
+        }
+
+        if (KafkaSourceConsumerFn.maxRecords != null && KafkaSourceConsumerFn.minutesToRun < 0) {
             return fetchedRecords < KafkaSourceConsumerFn.maxRecords;
         }
-        return elapsedTime < (KafkaSourceConsumerFn.minutesToRun * MILLIS);
+
+        return elapsedTime < KafkaSourceConsumerFn.minutesToRun * MILLIS;
     }
     
     @Override
