@@ -24,10 +24,8 @@ import org.apache.beam.sdk.coders.MapCoder;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
 import org.apache.beam.sdk.options.ValueProvider;
 import org.apache.beam.sdk.transforms.Create;
-import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.util.WindowedValue;
 import org.apache.beam.sdk.values.PBegin;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Joiner;
@@ -123,10 +121,10 @@ public class DebeziumIO {
     public abstract static class Read<T> extends PTransform<PBegin, PCollection<T>> {
 
         private static final long serialVersionUID = 1L;
-        private int maxNumberOfRecords = 10;
 
         abstract @Nullable ConnectorConfiguration getConnectorConfiguration();
         abstract @Nullable SourceRecordMapper<T> getFormatFunction();
+        abstract @Nullable Integer getMaxNumberOfRecords();
         abstract @Nullable Coder<T> getCoder();
         abstract Builder<T> toBuilder();
 
@@ -135,6 +133,7 @@ public class DebeziumIO {
             abstract Builder<T> setConnectorConfiguration(ConnectorConfiguration config);
             abstract Builder<T> setCoder(Coder<T> coder);
             abstract Builder<T> setFormatFunction(SourceRecordMapper<T> mapperFn);
+            abstract Builder<T> setMaxNumberOfRecords(Integer maxNumberOfRecords);
             abstract Read<T> build();
         }
 
@@ -170,6 +169,17 @@ public class DebeziumIO {
             return toBuilder().setCoder(coder).build();
         }
 
+        /**
+         * Once the specified number of records has been reached, it will stop fetching them. The value
+         * can be null (default) which means it will not stop.
+         *
+         * @param maxNumberOfRecords The maximum number of records to be fetched before stop.
+         * @return PTransform {@link #read}
+         */
+        public Read<T> withMaxNumberOfRecords(Integer maxNumberOfRecords) {
+            return toBuilder().setMaxNumberOfRecords(maxNumberOfRecords).build();
+        }
+
         @Override
         public PCollection<T> expand(PBegin input) {
             return input
@@ -177,7 +187,7 @@ public class DebeziumIO {
                             .withCoder(MapCoder.of(StringUtf8Coder.of(), StringUtf8Coder.of())))
                     .apply(ParDo.of(new KafkaSourceConsumerFn<>(
                             getConnectorConfiguration().getConnectorClass().get(),
-                            getFormatFunction(), maxNumberOfRecords)))
+                            getFormatFunction(), getMaxNumberOfRecords())))
                     .setCoder(getCoder());
         }
     }

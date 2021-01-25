@@ -53,7 +53,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     public static final String BEAM_INSTANCE_PROPERTY = "beam.parent.instance";
 
     public static long minutesToRun = -1;
-    public static int maxRecords;
+    public static Integer maxRecords;
     public static DateTime startTime;
 
     private final Class<? extends SourceConnector> connectorClass;
@@ -78,7 +78,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
      * @param connectorClass Supported Debezium connector class
      * @param fn a SourceRecordMapper
      */
-    public KafkaSourceConsumerFn(Class<?> connectorClass, SourceRecordMapper<T> fn, int maxRecords) {
+    public KafkaSourceConsumerFn(Class<?> connectorClass, SourceRecordMapper<T> fn, Integer maxRecords) {
         this.connectorClass = (Class<? extends SourceConnector>) connectorClass;
         this.fn = fn;
         KafkaSourceConsumerFn.maxRecords = maxRecords;
