@@ -27,6 +27,7 @@ import java.util.Map;
 /**
  * {@link RestrictionTracker} for Debezium connectors
  */
+@SuppressWarnings({"nullness"})
 public class DebeziumOffsetTracker extends RestrictionTracker<DebeziumOffsetHolder, Map<String, Object>> {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumOffsetTracker.class);
 

@@ -19,16 +19,17 @@ package org.apache.beam.io.cdc;
 
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.util.Map;
 
+@SuppressWarnings({"nullness"})
 public class DebeziumBeamSourceTaskContext implements SourceTaskContext {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumBeamSourceTaskContext.class);
 
-    @Nullable private final Map<String, ?> initialOffset;
+    private final @Nullable Map<String, ?> initialOffset;
 
     DebeziumBeamSourceTaskContext(@Nullable Map<String, ?> initialOffset) {
         this.initialOffset = initialOffset;

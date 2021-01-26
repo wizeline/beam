@@ -23,6 +23,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -55,17 +56,17 @@ import java.util.Map;
  *         .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper()
  * </pre>
  */
-
+@SuppressWarnings({"nullness"})
 public class SourceRecordJson {
-    private final SourceRecord sourceRecord;
-    private final Struct value;
-    private final Event event;
+    private final @Nullable SourceRecord sourceRecord;
+    private final @Nullable Struct value;
+    private final @Nullable Event event;
 
     /**
      * Initializer
      * @param sourceRecord retrieved SourceRecord using a supported SourceConnector
      */
-    public SourceRecordJson(SourceRecord sourceRecord) {
+    public SourceRecordJson(@Nullable SourceRecord sourceRecord) {
         if (sourceRecord == null) {
             throw new IllegalArgumentException();
         }
@@ -89,13 +90,13 @@ public class SourceRecordJson {
      * @return Metadata
      */
     private Metadata loadMetadata() {
-        Struct source;
+        @Nullable Struct source;
         try {
             source = (Struct) this.value.get("source");
         } catch (RuntimeException e) {
             throw new IllegalArgumentException();
         }
-        String schema;
+        @Nullable String schema;
 
         if(source == null) {
             return null;
@@ -122,7 +123,7 @@ public class SourceRecordJson {
      * @return Before
      */
     private Before loadBefore() {
-        Struct before;
+        @Nullable Struct before;
         try {
             before = (Struct) this.value.get("before");
         } catch (DataException e) {
@@ -145,7 +146,7 @@ public class SourceRecordJson {
      * @return After
      */
     private After loadAfter() {
-        Struct after;
+        @Nullable Struct after;
         try {
             after = (Struct) this.value.get("after");
         } catch (DataException e) {
@@ -175,7 +176,6 @@ public class SourceRecordJson {
      * {@link SourceRecordJson implementation}
      */
     public static class SourceRecordJsonMapper implements SourceRecordMapper<String> {
-
         @Override
         public String mapSourceRecord(SourceRecord sourceRecord) throws Exception {
             return new SourceRecordJson(sourceRecord).toJson();
@@ -187,9 +187,9 @@ public class SourceRecordJson {
  * Depicts a SourceRecord as an Event in order for it to be mapped as JSON
  */
 class Event implements Serializable {
-    private final Metadata metadata;
-    private final Before before;
-    private final After after;
+    private final @Nullable Metadata metadata;
+    private final @Nullable Before before;
+    private final @Nullable After after;
 
     /**
      * Event Initializer
@@ -197,7 +197,7 @@ class Event implements Serializable {
      * @param before Before data retrieved from SourceRecord
      * @param after After data retrieved from SourceRecord
      */
-    public Event(Metadata metadata, Before before, After after) {
+    public Event(@Nullable Metadata metadata, @Nullable Before before, @Nullable After after) {
         this.metadata = metadata;
         this.before = before;
         this.after = after;
@@ -217,23 +217,28 @@ class Event implements Serializable {
  * Depicts the metadata within a SourceRecord. It has valuable fields.
  */
 class Metadata implements Serializable {
-    private final String connector;
-    private final String version;
-    private final String name;
-    private final String database;
-    private final String schema;
-    private final String table;
+    private final @Nullable String connector;
+    private final @Nullable String version;
+    private final @Nullable String name;
+    private final @Nullable String database;
+    private final @Nullable String schema;
+    private final @Nullable String table;
 
     /**
      * Metadata Initializer
      * @param connector Connector used
      * @param version Connector version
-     * @param name
+     * @param name Connector name
      * @param database DB name
      * @param schema Schema name
      * @param table Table name
      */
-    public Metadata(String connector, String version, String name, String database, String schema, String table) {
+    public Metadata(@Nullable String connector,
+                    @Nullable String version,
+                    @Nullable String name,
+                    @Nullable String database,
+                    @Nullable String schema,
+                    @Nullable String table) {
         this.connector = connector;
         this.version = version;
         this.name = name;
@@ -247,13 +252,13 @@ class Metadata implements Serializable {
  * Depicts the before field within SourceRecord
  */
 class Before implements Serializable {
-    private final Map<String, Object> fields;
+    private final @Nullable Map<String, Object> fields;
 
     /**
      * Before Initializer
      * @param fields Key - Value map with information within Before
      */
-    public Before(Map<String, Object> fields) {
+    public Before(@Nullable Map<String, Object> fields) {
         this.fields = fields;
     }
 }
@@ -262,13 +267,13 @@ class Before implements Serializable {
  * Depicts the after field within SourceRecord
  */
 class After implements Serializable {
-    private final Map<String, Object> fields;
+    private final @Nullable Map<String, Object> fields;
 
     /**
      * After Initializer
      * @param fields Key - Value map with information within After
      */
-    public After(Map<String, Object> fields) {
+    public After(@Nullable Map<String, Object> fields) {
         this.fields = fields;
     }
 }

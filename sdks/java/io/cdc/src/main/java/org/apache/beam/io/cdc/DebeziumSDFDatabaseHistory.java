@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+@SuppressWarnings({"nullness"})
 public class DebeziumSDFDatabaseHistory extends AbstractDatabaseHistory {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumSDFDatabaseHistory.class);
 

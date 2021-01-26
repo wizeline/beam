@@ -48,6 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Or with a time limiter:
  * <pre>KafkaSourceConsumerFn(connectorClass, SourceRecordMapper, minutesToRun)</pre>
  */
+@SuppressWarnings({"nullness"})
 public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaSourceConsumerFn.class);
     public static final String BEAM_INSTANCE_PROPERTY = "beam.parent.instance";

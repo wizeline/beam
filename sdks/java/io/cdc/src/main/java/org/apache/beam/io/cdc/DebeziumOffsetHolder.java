@@ -17,18 +17,20 @@
  */
 package org.apache.beam.io.cdc;
 
-import javax.annotation.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class DebeziumOffsetHolder implements Serializable {
-    @Nullable public final Map<String, ?> offset;
-    @Nullable public final List<?> history;
-    @Nullable public final Integer fetchedRecords;
+    public final @Nullable Map<String, ?> offset;
+    public final @Nullable List<?> history;
+    public final @Nullable Integer fetchedRecords;
 
-    DebeziumOffsetHolder(@Nullable Map<String, ?> offset, @Nullable List<?> history, @Nullable Integer fetchedRecords) {
+    DebeziumOffsetHolder(@Nullable Map<String, ?> offset,
+                         @Nullable List<?> history,
+                         @Nullable Integer fetchedRecords) {
         this.offset = offset;
         this.history = history == null ? new ArrayList<>() : history;
         this.fetchedRecords = fetchedRecords;
