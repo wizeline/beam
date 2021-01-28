@@ -64,12 +64,12 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaSourceConsumerFn.class);
     public static final String BEAM_INSTANCE_PROPERTY = "beam.parent.instance";
 
-    public static long minutesToRun = -1;
-    public static Integer maxRecords;
-    public static DateTime startTime;
-
     private final Class<? extends SourceConnector> connectorClass;
     private final SourceRecordMapper<T> fn;
+
+    protected static long minutesToRun = -1;
+    protected static Integer maxRecords;
+    protected static DateTime startTime;
     protected static final Map<String, RestrictionTracker<OffsetHolder,  Map<String, Object>>>
     restrictionTrackers = new ConcurrentHashMap<>();
 
@@ -281,7 +281,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
                 return true;
             }
 
-            if (maxRecords != null && minutesToRun < 0) {
+            if (maxRecords != null) {
                 return fetchedRecords < maxRecords;
             }
 

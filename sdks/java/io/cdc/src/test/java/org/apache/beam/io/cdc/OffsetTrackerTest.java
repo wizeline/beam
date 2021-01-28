@@ -40,6 +40,7 @@ public class OffsetTrackerTest implements Serializable {
                 new SourceRecordJson.SourceRecordJsonMapper(), maxNumRecords);
         KafkaSourceConsumerFn.OffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
         KafkaSourceConsumerFn.OffsetTracker tracker = new KafkaSourceConsumerFn.OffsetTracker(restriction);
+        
         for (int records=0; records<maxNumRecords; records++) {
             assertTrue("OffsetTracker should continue",tracker.tryClaim(position));
         }
