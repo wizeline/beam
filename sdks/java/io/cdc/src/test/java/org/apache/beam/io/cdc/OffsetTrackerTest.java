@@ -31,16 +31,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
-public class DebeziumOffsetTrackerTest implements Serializable {
-
+public class OffsetTrackerTest implements Serializable {
     @Test
     public void testRestrictByNumberOfRecords() throws IOException {
         Integer maxNumRecords = 10;
         Map<String, Object> position = new HashMap<>();
         KafkaSourceConsumerFn<String> kafkaSourceConsumerFn = new KafkaSourceConsumerFn<String>(MySqlConnector.class,
                 new SourceRecordJson.SourceRecordJsonMapper(), maxNumRecords);
-        DebeziumOffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
-        DebeziumOffsetTracker tracker = new DebeziumOffsetTracker(restriction);
+        KafkaSourceConsumerFn.OffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
+        KafkaSourceConsumerFn.OffsetTracker tracker = new KafkaSourceConsumerFn.OffsetTracker(restriction);
         for (int records=0; records<maxNumRecords; records++) {
             assertTrue("OffsetTracker should continue",tracker.tryClaim(position));
         }
@@ -54,8 +53,8 @@ public class DebeziumOffsetTrackerTest implements Serializable {
         Map<String, Object> position = new HashMap<>();
         KafkaSourceConsumerFn<String> kafkaSourceConsumerFn = new KafkaSourceConsumerFn<String>(MySqlConnector.class,
                 new SourceRecordJson.SourceRecordJsonMapper(), minutesToRun);
-        DebeziumOffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
-        DebeziumOffsetTracker tracker = new DebeziumOffsetTracker(restriction);
+        KafkaSourceConsumerFn.OffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
+        KafkaSourceConsumerFn.OffsetTracker tracker = new KafkaSourceConsumerFn.OffsetTracker(restriction);
 
         assertTrue(tracker.tryClaim(position));
 

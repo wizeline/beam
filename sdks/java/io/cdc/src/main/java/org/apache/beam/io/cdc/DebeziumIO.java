@@ -79,7 +79,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
  *       ).setCoder(StringUtf8Coder.of());
  *       p.run().waitUntilFinish();
  * </pre>
- * <p>In this example we are using {@link DebeziumSDFDatabaseHistory} to handle the Database history.</p>
+ * <p>In this example we are using {@link KafkaSourceConsumerFn.DebeziumSDFDatabaseHistory} to handle the Database history.</p>
  *
  * <h3>Dependencies</h3>
  * <p>User may work with any of the supported Debezium Connectors above mentioned</p>
@@ -454,7 +454,7 @@ public class DebeziumIO {
             }
 
             // Set default Database History impl. if not provided
-            configuration.computeIfAbsent("database.history", k -> DebeziumSDFDatabaseHistory.class.getName());
+            configuration.computeIfAbsent("database.history", k -> KafkaSourceConsumerFn.DebeziumSDFDatabaseHistory.class.getName());
 
             String stringProperties = Joiner.on('\n').withKeyValueSeparator(" -> ").join(configuration);
             LOG.debug("---------------- Connector configuration: {}", stringProperties);

@@ -21,6 +21,10 @@ import org.apache.kafka.connect.source.SourceRecord;
 
 import java.io.Serializable;
 
+/**
+ * Interface used to map a Kafka source record
+ * @param <T> The desired type you want to map the Kafka source record
+ */
 @FunctionalInterface
 public interface SourceRecordMapper<T> extends Serializable {
     T mapSourceRecord(SourceRecord sourceRecord) throws Exception;
