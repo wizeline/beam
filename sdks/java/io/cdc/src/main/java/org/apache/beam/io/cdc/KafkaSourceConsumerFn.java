@@ -142,7 +142,7 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
             Map<String, ?> consumerOffset = tracker.currentRestriction().offset;
             LOG.debug("--------- Consumer offset from Debezium Tracker: {}", consumerOffset);
 
-            task.initialize(new DebeziumBeamSourceTaskContext(consumerOffset));
+            task.initialize(new BeamSourceTaskContext(tracker.currentRestriction().offset));
             task.start(connector.taskConfigs(1).get(0));
 
             List<SourceRecord> records = task.poll();
@@ -187,11 +187,11 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
 
             LOG.debug("------- Stopping SourceTask.");
             task.stop();
+        }
 
-            if(stopConsumer) {
-                LOG.debug("------- No more work to be done. Stopping consumer.");
-                return ProcessContinuation.stop();
-            }
+        if(stopConsumer) {
+            LOG.debug("------- No more work to be done. Stopping consumer.");
+            return ProcessContinuation.stop();
         }
 
         return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
