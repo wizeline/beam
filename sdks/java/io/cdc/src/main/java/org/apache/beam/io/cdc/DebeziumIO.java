@@ -19,6 +19,8 @@ package org.apache.beam.io.cdc;
 
 import com.google.auto.value.AutoValue;
 
+import org.apache.beam.sdk.annotations.Experimental;
+import org.apache.beam.sdk.annotations.Experimental.Kind;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.MapCoder;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
@@ -87,6 +89,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
  *     See <a href="https://debezium.io/documentation/reference/1.3/connectors/index.html">Debezium Connectors</a> for more info.
  * </p>
  */
+@Experimental(Kind.SOURCE_SINK)
 @SuppressWarnings({"nullness"})
 public class DebeziumIO {
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumIO.class);

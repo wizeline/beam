@@ -322,10 +322,10 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
             LOG.debug("------------ STARTING THE DATABASE HISTORY! - trackers: {} - config: {}",
                     restrictionTrackers, config.asMap());
 
-            // TODO(pabloem): Figure out how to link these. For now, we'll just link directly.
-            RestrictionTracker<OffsetHolder, ?> tracker = restrictionTrackers.get(
-                    // JUST GETTING THE FIRST KEY. This will not work in the future.
-                    restrictionTrackers.keySet().iterator().next());
+            // We fetch the first key to get the first restriction tracker.
+            // TODO(BEAM-11737): This may cause issues with multiple trackers in the future.
+            RestrictionTracker<OffsetHolder, ?> tracker = restrictionTrackers
+                    .get(restrictionTrackers.keySet().iterator().next());
             this.history = (List<byte[]>) tracker.currentRestriction().history;
         }
 
