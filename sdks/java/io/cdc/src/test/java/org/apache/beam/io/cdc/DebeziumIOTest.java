@@ -17,10 +17,11 @@
  */
 package org.apache.beam.io.cdc;
 
+import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
-import org.apache.kafka.common.config.Config;
+import io.debezium.connector.mysql.MySqlConnectorConfig;
+import org.apache.beam.io.cdc.DebeziumIO.ConnectorConfiguration;
 import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -29,8 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Map;
-
-import org.apache.beam.io.cdc.DebeziumIO.ConnectorConfiguration;
 
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -50,7 +49,7 @@ public class DebeziumIOTest implements Serializable {
             .withConnectionProperty("database.server.id", "184054")
             .withConnectionProperty("database.server.name", "dbserver1")
             .withConnectionProperty("database.include.list", "inventory")
-            .withConnectionProperty("database.history", DebeziumSDFDatabaseHistory.class.getName())
+            .withConnectionProperty("database.history", KafkaSourceConsumerFn.DebeziumSDFDatabaseHistory.class.getName())
             .withConnectionProperty("include.schema.changes", "false");
 
     @Test
@@ -58,11 +57,10 @@ public class DebeziumIOTest implements Serializable {
         Map<String, String> configurationMap = MYSQL_CONNECTOR_CONFIGURATION
                 .getConfigurationMap();
 
-        SourceConnector conn = new MySqlConnector();
+        Configuration debeziumConf = Configuration.from(configurationMap);
+        Map<String, ConfigValue> validConfig = debeziumConf.validate(MySqlConnectorConfig.ALL_FIELDS);
 
-        Config config = conn.validate(configurationMap);
-
-        for(ConfigValue configValue: config.configValues()) {
+        for(ConfigValue configValue: validConfig.values()) {
             assertTrue(configValue.errorMessages().isEmpty());
         }
     }
@@ -74,14 +72,12 @@ public class DebeziumIOTest implements Serializable {
         ConnectorConfiguration configuration = MYSQL_CONNECTOR_CONFIGURATION
                 .withUsername(username)
                 .withPassword(password);
-        Map<String, String> configurationMap = configuration
-                .getConfigurationMap();
+        Map<String, String> configurationMap = configuration.getConfigurationMap();
 
-        SourceConnector conn = new MySqlConnector();
+        Configuration debeziumConf = Configuration.from(configurationMap);
+        Map<String, ConfigValue> validConfig = debeziumConf.validate(MySqlConnectorConfig.ALL_FIELDS);
 
-        Config config = conn.validate(configurationMap);
-
-        for(ConfigValue configValue: config.configValues()) {
+        for(ConfigValue configValue: validConfig.values()) {
             assertTrue(configValue.errorMessages().isEmpty());
         }
     }

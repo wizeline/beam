@@ -74,9 +74,14 @@ public class DebeziumIOMySqlConnectorIT {
                 .withConnectionProperty("database.include.list", "inventory")
                 .withConnectionProperty("include.schema.changes", "false"))
         .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper())
+        .withMaxNumberOfRecords(30)
         .withCoder(StringUtf8Coder.of())
     );
-    String expected = "{\"metadata\":{\"connector\":\"mysql\",\"version\":\"1.3.1.Final\",\"name\":\"dbserver1\",\"database\":\"inventory\",\"schema\":\"mysql-bin.000003\",\"table\":\"addresses\"},\"before\":null,\"after\":{\"fields\":{\"zip\":\"76036\",\"city\":\"Euless\",\"street\":\"3183 Moore Avenue\",\"id\":10,\"state\":\"Texas\",\"customer_id\":1001,\"type\":\"SHIPPING\"}}}";
+    String expected = "{\"metadata\":{\"connector\":\"mysql\",\"version\":\"1.3.1.Final\",\"name\":\"dbserver1\"," +
+            "\"database\":\"inventory\",\"schema\":\"mysql-bin.000003\",\"table\":\"addresses\"},\"before\":null," +
+            "\"after\":{\"fields\":{\"zip\":\"76036\",\"city\":\"Euless\"," +
+            "\"street\":\"3183 Moore Avenue\",\"id\":10,\"state\":\"Texas\",\"customer_id\":1001," +
+            "\"type\":\"SHIPPING\"}}}";
 
     PAssert.that(results).satisfies((Iterable<String> res) -> {
       assertThat(res, hasItem(expected));

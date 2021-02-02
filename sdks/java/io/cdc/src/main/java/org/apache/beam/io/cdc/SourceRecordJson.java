@@ -23,6 +23,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -55,17 +56,17 @@ import java.util.Map;
  *         .withFormatFunction(new SourceRecordJson.SourceRecordJsonMapper()
  * </pre>
  */
-
+@SuppressWarnings({"nullness"})
 public class SourceRecordJson {
-    private final SourceRecord sourceRecord;
-    private final Struct value;
-    private final Event event;
+    private final @Nullable SourceRecord sourceRecord;
+    private final @Nullable Struct value;
+    private final @Nullable Event event;
 
     /**
      * Initializer
      * @param sourceRecord retrieved SourceRecord using a supported SourceConnector
      */
-    public SourceRecordJson(SourceRecord sourceRecord) {
+    public SourceRecordJson(@Nullable SourceRecord sourceRecord) {
         if (sourceRecord == null) {
             throw new IllegalArgumentException();
         }
@@ -76,9 +77,9 @@ public class SourceRecordJson {
         if (this.value == null) {
             this.event = new Event(null, null, null);
         } else {
-            Metadata metadata = this.loadMetadata();
-            Before before = this.loadBefore();
-            After after = this.loadAfter();
+            Event.Metadata metadata = this.loadMetadata();
+            Event.Before before = this.loadBefore();
+            Event.After after = this.loadAfter();
 
             this.event = new Event(metadata, before, after);
         }
@@ -88,14 +89,14 @@ public class SourceRecordJson {
      * Extracts metadata from the SourceRecord
      * @return Metadata
      */
-    private Metadata loadMetadata() {
-        Struct source;
+    private Event.Metadata loadMetadata() {
+        @Nullable Struct source;
         try {
             source = (Struct) this.value.get("source");
         } catch (RuntimeException e) {
             throw new IllegalArgumentException();
         }
-        String schema;
+        @Nullable String schema;
 
         if(source == null) {
             return null;
@@ -109,7 +110,7 @@ public class SourceRecordJson {
             schema = source.getString("file");
         }
 
-        return new Metadata(source.getString("connector"),
+        return new Event.Metadata(source.getString("connector"),
                 source.getString("version"),
                 source.getString("name"),
                 source.getString("db"),
@@ -121,8 +122,8 @@ public class SourceRecordJson {
      * Extracts the before field within SourceRecord
      * @return Before
      */
-    private Before loadBefore() {
-        Struct before;
+    private Event.Before loadBefore() {
+        @Nullable Struct before;
         try {
             before = (Struct) this.value.get("before");
         } catch (DataException e) {
@@ -137,15 +138,15 @@ public class SourceRecordJson {
             fields.put(field.name(), before.get(field));
         }
 
-        return new Before(fields);
+        return new Event.Before(fields);
     }
 
     /**
      * Extracts the after field within SourceRecord
      * @return After
      */
-    private After loadAfter() {
-        Struct after;
+    private Event.After loadAfter() {
+        @Nullable Struct after;
         try {
             after = (Struct) this.value.get("after");
         } catch (DataException e) {
@@ -160,7 +161,7 @@ public class SourceRecordJson {
             fields.put(field.name(), after.get(field));
         }
 
-        return new After(fields);
+        return new Event.After(fields);
     }
 
     /**
@@ -175,100 +176,107 @@ public class SourceRecordJson {
      * {@link SourceRecordJson implementation}
      */
     public static class SourceRecordJsonMapper implements SourceRecordMapper<String> {
-
         @Override
         public String mapSourceRecord(SourceRecord sourceRecord) throws Exception {
             return new SourceRecordJson(sourceRecord).toJson();
         }
     }
-}
-
-/**
- * Depicts a SourceRecord as an Event in order for it to be mapped as JSON
- */
-class Event implements Serializable {
-    private final Metadata metadata;
-    private final Before before;
-    private final After after;
 
     /**
-     * Event Initializer
-     * @param metadata Metadata retrieved from SourceRecord
-     * @param before Before data retrieved from SourceRecord
-     * @param after After data retrieved from SourceRecord
+     * Depicts a SourceRecord as an Event in order for it to be mapped as JSON
      */
-    public Event(Metadata metadata, Before before, After after) {
-        this.metadata = metadata;
-        this.before = before;
-        this.after = after;
-    }
+    static class Event implements Serializable {
+        private final SourceRecordJson.Event.Metadata metadata;
+        private final SourceRecordJson.Event.Before before;
+        private final SourceRecordJson.Event.After after;
 
-    /**
-     * Transforms the Event to a JSON string
-     * @return JSON String
-     */
-    public String toJson() {
-        Gson gson = new GsonBuilder().serializeNulls().create();
-        return gson.toJson(this);
+        /**
+         * Event Initializer
+         * @param metadata Metadata retrieved from SourceRecord
+         * @param before Before data retrieved from SourceRecord
+         * @param after After data retrieved from SourceRecord
+         */
+        public Event(SourceRecordJson.Event.Metadata metadata,
+                     SourceRecordJson.Event.Before before,
+                     SourceRecordJson.Event.After after) {
+            this.metadata = metadata;
+            this.before = before;
+            this.after = after;
+        }
+
+        /**
+         * Transforms the Event to a JSON string
+         * @return JSON String
+         */
+        public String toJson() {
+            Gson gson = new GsonBuilder().serializeNulls().create();
+            return gson.toJson(this);
+        }
+
+        /**
+         * Depicts the metadata within a SourceRecord. It has valuable fields.
+         */
+        static class Metadata implements Serializable {
+            private final @Nullable String connector;
+            private final @Nullable String version;
+            private final @Nullable String name;
+            private final @Nullable String database;
+            private final @Nullable String schema;
+            private final @Nullable String table;
+
+            /**
+             * Metadata Initializer
+             * @param connector Connector used
+             * @param version Connector version
+             * @param name Connector name
+             * @param database DB name
+             * @param schema Schema name
+             * @param table Table name
+             */
+            public Metadata(@Nullable String connector,
+                            @Nullable String version,
+                            @Nullable String name,
+                            @Nullable String database,
+                            @Nullable String schema,
+                            @Nullable String table) {
+                this.connector = connector;
+                this.version = version;
+                this.name = name;
+                this.database = database;
+                this.schema = schema;
+                this.table = table;
+            }
+        }
+
+        /**
+         * Depicts the before field within SourceRecord
+         */
+        static class Before implements Serializable {
+            private final @Nullable Map<String, Object> fields;
+
+            /**
+             * Before Initializer
+             * @param fields Key - Value map with information within Before
+             */
+            public Before(@Nullable Map<String, Object> fields) {
+                this.fields = fields;
+            }
+        }
+
+        /**
+         * Depicts the after field within SourceRecord
+         */
+        static class After implements Serializable {
+            private final @Nullable Map<String, Object> fields;
+
+            /**
+             * After Initializer
+             * @param fields Key - Value map with information within After
+             */
+            public After(@Nullable Map<String, Object> fields) {
+                this.fields = fields;
+            }
+        }
     }
 }
 
-/**
- * Depicts the metadata within a SourceRecord. It has valuable fields.
- */
-class Metadata implements Serializable {
-    private final String connector;
-    private final String version;
-    private final String name;
-    private final String database;
-    private final String schema;
-    private final String table;
-
-    /**
-     * Metadata Initializer
-     * @param connector Connector used
-     * @param version Connector version
-     * @param name
-     * @param database DB name
-     * @param schema Schema name
-     * @param table Table name
-     */
-    public Metadata(String connector, String version, String name, String database, String schema, String table) {
-        this.connector = connector;
-        this.version = version;
-        this.name = name;
-        this.database = database;
-        this.schema = schema;
-        this.table = table;
-    }
-}
-
-/**
- * Depicts the before field within SourceRecord
- */
-class Before implements Serializable {
-    private final Map<String, Object> fields;
-
-    /**
-     * Before Initializer
-     * @param fields Key - Value map with information within Before
-     */
-    public Before(Map<String, Object> fields) {
-        this.fields = fields;
-    }
-}
-
-/**
- * Depicts the after field within SourceRecord
- */
-class After implements Serializable {
-    private final Map<String, Object> fields;
-
-    /**
-     * After Initializer
-     * @param fields Key - Value map with information within After
-     */
-    public After(Map<String, Object> fields) {
-        this.fields = fields;
-    }
-}
