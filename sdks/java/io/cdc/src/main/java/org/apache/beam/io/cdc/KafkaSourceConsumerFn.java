@@ -136,8 +136,6 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
 
         SourceTask task = (SourceTask) connector.taskClass().getDeclaredConstructor().newInstance();
 
-        boolean stopConsumer = false;
-        int processedRecords = 0;
         try {
             Map<String, ?> consumerOffset = tracker.currentRestriction().offset;
             LOG.debug("--------- Consumer offset from Debezium Tracker: {}", consumerOffset);
@@ -146,52 +144,41 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
             task.start(connector.taskConfigs(1).get(0));
 
             List<SourceRecord> records = task.poll();
+
             if (records == null) {
-                LOG.debug("-------- No records found");
-                stopConsumer = true;
+                LOG.debug("-------- Pulled records null");
+                return ProcessContinuation.stop();
             }
             else
             {
-                if (records.isEmpty()) {
-                    LOG.debug("-------- Zero records found");
-                }
+                LOG.debug("-------- {} records found", records.size());
+                if (!records.isEmpty()) {
+                    for (SourceRecord record : records) {
+                        LOG.debug("-------- Record found: {}", record);
 
-                for (SourceRecord record : records) {
-                    LOG.debug("-------- Record found: {}", record);
+                        Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
 
-                    Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
+                        if (offset == null || !tracker.tryClaim(offset)) {
+                            LOG.debug("-------- Offset null or could not be claimed");
+                            return ProcessContinuation.stop();
+                        }
 
-                    if (offset == null || !tracker.tryClaim(offset)) {
-                        LOG.debug("-------- Offset null or could not be claimed");
-                        stopConsumer = true;
-                        break;
+                        T json = this.fn.mapSourceRecord(record);
+                        LOG.debug("****************** RECEIVED SOURCE AS JSON: {}", json);
+
+                        receiver.output(json);
                     }
 
-                    T json = this.fn.mapSourceRecord(record);
-                    LOG.debug("****************** RECEIVED SOURCE AS JSON: {}", json);
-
-                    receiver.output(json);
-                    processedRecords++;
+                    task.commit();
                 }
-
-                LOG.debug("-------- Records processed: {}", processedRecords);
             }
         } catch (Exception ex) {
-            LOG.error("-------- Error: {}. with stacktrace: {}", ex.getMessage(), ex.getStackTrace());
+            LOG.error("-------- Error on consumer: {}. with stacktrace: {}", ex.getMessage(), ex.getStackTrace());
         }finally {
             restrictionTrackers.remove(this.getHashCode());
 
-            if(processedRecords > 0){
-                task.commit();
-            }
-
             LOG.debug("------- Stopping SourceTask.");
             task.stop();
-        }
-
-        if(stopConsumer) {
-            LOG.debug("------- No more work to be done. Stopping consumer.");
-            return ProcessContinuation.stop();
         }
 
         return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
