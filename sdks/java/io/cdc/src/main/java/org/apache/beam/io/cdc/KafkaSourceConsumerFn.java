@@ -149,35 +149,33 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
                 LOG.debug("-------- Pulled records null");
                 return ProcessContinuation.stop();
             }
-            else
-            {
-                LOG.debug("-------- {} records found", records.size());
-                if (!records.isEmpty()) {
-                    for (SourceRecord record : records) {
-                        LOG.debug("-------- Record found: {}", record);
 
-                        Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
+            LOG.debug("-------- {} records found", records.size());
+            if (!records.isEmpty()) {
+                for (SourceRecord record : records) {
+                    LOG.debug("-------- Record found: {}", record);
 
-                        if (offset == null || !tracker.tryClaim(offset)) {
-                            LOG.debug("-------- Offset null or could not be claimed");
-                            return ProcessContinuation.stop();
-                        }
+                    Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
 
-                        T json = this.fn.mapSourceRecord(record);
-                        LOG.debug("****************** RECEIVED SOURCE AS JSON: {}", json);
-
-                        receiver.output(json);
+                    if (offset == null || !tracker.tryClaim(offset)) {
+                        LOG.debug("-------- Offset null or could not be claimed");
+                        return ProcessContinuation.stop();
                     }
 
-                    task.commit();
+                    T json = this.fn.mapSourceRecord(record);
+                    LOG.debug("****************** RECEIVED SOURCE AS JSON: {}", json);
+
+                    receiver.output(json);
                 }
+
+                task.commit();
             }
         } catch (Exception ex) {
             LOG.error("-------- Error on consumer: {}. with stacktrace: {}", ex.getMessage(), ex.getStackTrace());
         }finally {
             restrictionTrackers.remove(this.getHashCode());
 
-            LOG.debug("------- Stopping SourceTask.");
+            LOG.debug("------- Stopping SourceTask");
             task.stop();
         }
 
