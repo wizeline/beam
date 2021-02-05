@@ -15,17 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.io.cdc;
-
-import java.io.Serializable;
-import org.apache.kafka.connect.source.SourceRecord;
 
 /**
- * Interface used to map a Kafka source record.
+ * Transforms for reading from DebeziumIO.
  *
- * @param <T> The desired type you want to map the Kafka source record
+ * @see org.apache.beam.io.cdc.DebeziumIO
  */
-@FunctionalInterface
-public interface SourceRecordMapper<T> extends Serializable {
-  T mapSourceRecord(SourceRecord sourceRecord) throws Exception;
-}
+@Experimental(Kind.SOURCE_SINK)
+package org.apache.beam.io.cdc;
+
+import org.apache.beam.sdk.annotations.Experimental;
+import org.apache.beam.sdk.annotations.Experimental.Kind;
