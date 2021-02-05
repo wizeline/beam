@@ -136,41 +136,49 @@ public class KafkaSourceConsumerFn<T> extends DoFn<Map<String, String>, T> {
 
         SourceTask task = (SourceTask) connector.taskClass().getDeclaredConstructor().newInstance();
 
-        task.initialize(new BeamSourceTaskContext(tracker.currentRestriction().offset));
-        task.start(connector.taskConfigs(1).get(0));
+        try {
+            Map<String, ?> consumerOffset = tracker.currentRestriction().offset;
+            LOG.debug("--------- Consumer offset from Debezium Tracker: {}", consumerOffset);
 
-        List<SourceRecord> records = task.poll();
-        if (records == null) {
-            LOG.debug("----------- No records found");
+            task.initialize(new BeamSourceTaskContext(tracker.currentRestriction().offset));
+            task.start(connector.taskConfigs(1).get(0));
 
-            restrictionTrackers.remove(this.getHashCode());
-            return ProcessContinuation.stop();
-        }
+            List<SourceRecord> records = task.poll();
 
-        if (records.size() == 0) {
-            restrictionTrackers.remove(this.getHashCode());
-            return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
-        }
-
-        for (SourceRecord record : records) {
-            LOG.debug("------------ Record found: {}", record);
-
-            Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
-
-            if (offset == null || !tracker.tryClaim(offset)) {
-                restrictionTrackers.remove(this.getHashCode());
+            if (records == null) {
+                LOG.debug("-------- Pulled records null");
                 return ProcessContinuation.stop();
             }
 
-            T json = this.fn.mapSourceRecord(record);
-            LOG.debug("****************** RECEIVED SOURCE AS JSON: {}", json);
+            LOG.debug("-------- {} records found", records.size());
+            if (!records.isEmpty()) {
+                for (SourceRecord record : records) {
+                    LOG.debug("-------- Record found: {}", record);
 
-            receiver.output(json);
+                    Map<String, Object> offset = (Map<String, Object>) record.sourceOffset();
+
+                    if (offset == null || !tracker.tryClaim(offset)) {
+                        LOG.debug("-------- Offset null or could not be claimed");
+                        return ProcessContinuation.stop();
+                    }
+
+                    T json = this.fn.mapSourceRecord(record);
+                    LOG.debug("****************** RECEIVED SOURCE AS JSON: {}", json);
+
+                    receiver.output(json);
+                }
+
+                task.commit();
+            }
+        } catch (Exception ex) {
+            LOG.error("-------- Error on consumer: {}. with stacktrace: {}", ex.getMessage(), ex.getStackTrace());
+        }finally {
+            restrictionTrackers.remove(this.getHashCode());
+
+            LOG.debug("------- Stopping SourceTask");
+            task.stop();
         }
 
-        LOG.debug("WE SHOULD RESUME IN A BIT!");
-
-        restrictionTrackers.remove(this.getHashCode());
         return ProcessContinuation.resume().withResumeDelay(Duration.standardSeconds(1));
     }
 
