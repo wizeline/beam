@@ -17,50 +17,55 @@
  */
 package org.apache.beam.io.cdc;
 
-import io.debezium.connector.mysql.MySqlConnector;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
+import io.debezium.connector.mysql.MySqlConnector;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class OffsetTrackerTest implements Serializable {
-    @Test
-    public void testRestrictByNumberOfRecords() throws IOException {
-        Integer maxNumRecords = 10;
-        Map<String, Object> position = new HashMap<>();
-        KafkaSourceConsumerFn<String> kafkaSourceConsumerFn = new KafkaSourceConsumerFn<String>(MySqlConnector.class,
-                new SourceRecordJson.SourceRecordJsonMapper(), maxNumRecords);
-        KafkaSourceConsumerFn.OffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
-        KafkaSourceConsumerFn.OffsetTracker tracker = new KafkaSourceConsumerFn.OffsetTracker(restriction);
-        
-        for (int records=0; records<maxNumRecords; records++) {
-            assertTrue("OffsetTracker should continue",tracker.tryClaim(position));
-        }
-        assertFalse("OffsetTracker should stop", tracker.tryClaim(position));
+  @Test
+  public void testRestrictByNumberOfRecords() throws IOException {
+    Integer maxNumRecords = 10;
+    Map<String, Object> position = new HashMap<>();
+    KafkaSourceConsumerFn<String> kafkaSourceConsumerFn =
+        new KafkaSourceConsumerFn<String>(
+            MySqlConnector.class, new SourceRecordJson.SourceRecordJsonMapper(), maxNumRecords);
+    KafkaSourceConsumerFn.OffsetHolder restriction =
+        kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
+    KafkaSourceConsumerFn.OffsetTracker tracker =
+        new KafkaSourceConsumerFn.OffsetTracker(restriction);
+
+    for (int records = 0; records < maxNumRecords; records++) {
+      assertTrue("OffsetTracker should continue", tracker.tryClaim(position));
     }
+    assertFalse("OffsetTracker should stop", tracker.tryClaim(position));
+  }
 
-    @Test
-    public void testRestrictByAmountOfTime() throws IOException, InterruptedException {
-        long MILLIS = 60 * 1000;
-        long minutesToRun = 1;
-        Map<String, Object> position = new HashMap<>();
-        KafkaSourceConsumerFn<String> kafkaSourceConsumerFn = new KafkaSourceConsumerFn<String>(MySqlConnector.class,
-                new SourceRecordJson.SourceRecordJsonMapper(), minutesToRun);
-        KafkaSourceConsumerFn.OffsetHolder restriction = kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
-        KafkaSourceConsumerFn.OffsetTracker tracker = new KafkaSourceConsumerFn.OffsetTracker(restriction);
+  @Test
+  public void testRestrictByAmountOfTime() throws IOException, InterruptedException {
+    long millis = 60 * 1000;
+    long minutesToRun = 1;
+    Map<String, Object> position = new HashMap<>();
+    KafkaSourceConsumerFn<String> kafkaSourceConsumerFn =
+        new KafkaSourceConsumerFn<String>(
+            MySqlConnector.class, new SourceRecordJson.SourceRecordJsonMapper(), minutesToRun);
+    KafkaSourceConsumerFn.OffsetHolder restriction =
+        kafkaSourceConsumerFn.getInitialRestriction(new HashMap<>());
+    KafkaSourceConsumerFn.OffsetTracker tracker =
+        new KafkaSourceConsumerFn.OffsetTracker(restriction);
 
-        assertTrue(tracker.tryClaim(position));
+    assertTrue(tracker.tryClaim(position));
 
-        Thread.sleep(minutesToRun * MILLIS + 100);
+    Thread.sleep(minutesToRun * millis + 100);
 
-        assertFalse(tracker.tryClaim(position));
-    }
+    assertFalse(tracker.tryClaim(position));
+  }
 }
