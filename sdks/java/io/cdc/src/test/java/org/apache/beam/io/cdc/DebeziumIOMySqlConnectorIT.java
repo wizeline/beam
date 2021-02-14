@@ -44,7 +44,7 @@ public class DebeziumIOMySqlConnectorIT {
    * <p>Creates a docker container using the image used by the debezium tutorial.
    */
   @ClassRule
-  private static final MySQLContainer<?> mySQLContainer =
+  public static final MySQLContainer<?> mySQLContainer =
       new MySQLContainer<>(
               DockerImageName.parse("debezium/example-mysql:1.4")
                   .asCompatibleSubstituteFor("mysql"))

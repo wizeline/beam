@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import groovy.json.JsonOutput
 
 plugins { id 'org.apache.beam.module' }
 applyJavaNature(
@@ -26,7 +27,6 @@ applyJavaNature(
         enableSpotbugs: false,
 )
 provideIntegrationTestingDependencies()
-enableJavaPerformanceTesting()
 
 description = "Apache Beam :: SDKs :: Java :: IO :: CDC"
 ext.summary = "Library to work with CDC data."
@@ -62,4 +62,22 @@ test {
         outputs.upToDateWhen {false}
         showStandardStreams = true
     }
+}
+
+
+task integrationTest(type: Test, dependsOn: processTestResources) {
+  group = "Verification"
+  systemProperty "beamTestPipelineOptions", JsonOutput.toJson([
+          "--runner=DirectRunner",
+  ])
+
+  // Disable Gradle cache: these ITs interact with live service that should always be considered "out of date"
+  outputs.upToDateWhen { false }
+
+  include '**/*IT.class'
+  classpath = sourceSets.test.runtimeClasspath
+  testClassesDirs = sourceSets.test.output.classesDirs
+
+  useJUnit {
+  }
 }
