@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.io.cdc;
+package org.apache.beam.io.debezium;
 
 import static org.apache.beam.sdk.testing.SerializableMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -44,7 +44,7 @@ public class DebeziumIOMySqlConnectorIT {
    * <p>Creates a docker container using the image used by the debezium tutorial.
    */
   @ClassRule
-  public static final MySQLContainer<?> mySQLContainer =
+  public static final MySQLContainer<?> MY_SQL_CONTAINER =
       new MySQLContainer<>(
               DockerImageName.parse("debezium/example-mysql:1.4")
                   .asCompatibleSubstituteFor("mysql"))
@@ -64,10 +64,10 @@ public class DebeziumIOMySqlConnectorIT {
    */
   @Test
   public void testDebeziumIOMySql() {
-    mySQLContainer.start();
+    MY_SQL_CONTAINER.start();
 
-    String host = mySQLContainer.getContainerIpAddress();
-    String port = mySQLContainer.getMappedPort(3306).toString();
+    String host = MY_SQL_CONTAINER.getContainerIpAddress();
+    String port = MY_SQL_CONTAINER.getMappedPort(3306).toString();
 
     PipelineOptions options = PipelineOptionsFactory.create();
     Pipeline p = Pipeline.create(options);
@@ -103,6 +103,6 @@ public class DebeziumIOMySqlConnectorIT {
             });
 
     p.run().waitUntilFinish();
-    mySQLContainer.stop();
+    MY_SQL_CONTAINER.stop();
   }
 }

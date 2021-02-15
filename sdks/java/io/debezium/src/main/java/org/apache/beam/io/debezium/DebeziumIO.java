@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.io.cdc;
+package org.apache.beam.io.debezium;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 
@@ -113,7 +113,8 @@ public class DebeziumIO {
   /**
    * Read data from Debezium source and convert a Kafka {@link
    * org.apache.kafka.connect.source.SourceRecord} into a JSON string using {@link
-   * org.apache.beam.io.cdc.SourceRecordJson.SourceRecordJsonMapper} as default function mapper.
+   * org.apache.beam.io.debezium.SourceRecordJson.SourceRecordJsonMapper} as default function
+   * mapper.
    *
    * @return Reader object of String.
    */

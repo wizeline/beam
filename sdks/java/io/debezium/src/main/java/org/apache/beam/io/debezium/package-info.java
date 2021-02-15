@@ -19,10 +19,10 @@
 /**
  * Transforms for reading from DebeziumIO.
  *
- * @see org.apache.beam.io.cdc.DebeziumIO
+ * @see org.apache.beam.io.debezium.DebeziumIO
  */
 @Experimental(Kind.SOURCE_SINK)
-package org.apache.beam.io.cdc;
+package org.apache.beam.io.debezium;
 
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.annotations.Experimental.Kind;

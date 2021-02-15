@@ -170,9 +170,9 @@ By default, DebeziumIO initializes it with the former, though user may choose th
 
 ## Running Unit Tests
 
-You can run Unit Tests using **gradlew**.
+You can run Integration Tests using **gradlew**.
 
-Example of running the MySQL Connector Test:
+Example of running the MySQL Connector Integration Test:
 ```
-./gradlew :sdks:java:io:cdc:test --tests="**testDebeziumIOMySql"
+./gradlew integrationTest -p sdks/java/io/debezium/ --tests org.apache.beam.io.debezium.DebeziumIOMySqlConnectorIT -DintegrationTestRunner=direct
 ```
