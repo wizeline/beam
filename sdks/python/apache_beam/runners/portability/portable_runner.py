@@ -28,6 +28,8 @@ import logging
 import threading
 import time
 from typing import TYPE_CHECKING
+from typing import Any
+from typing import Dict
 from typing import Iterator
 from typing import Optional
 from typing import Tuple
@@ -169,6 +171,11 @@ class JobServiceHandle(object):
         add_extra_args_fn=add_runner_options,
         retain_unknown_options=self._retain_unknown_options)
 
+    return self.encode_pipeline_options(all_options)
+
+  @staticmethod
+  def encode_pipeline_options(
+      all_options: Dict[str, Any]) -> 'struct_pb2.Struct':
     def convert_pipeline_option_value(v):
       # convert int values: BEAM-5509
       if type(v) == int:
@@ -321,54 +328,87 @@ class PortableRunner(runner.PipelineRunner):
         default_environment=PortableRunner._create_environment(
             portable_options))
 
-    # Preemptively apply combiner lifting, until all runners support it.
-    # These optimizations commute and are idempotent.
+    # TODO: https://issues.apache.org/jira/browse/BEAM-7199
+    # Eventually remove the 'pre_optimize' option alltogether and only perform
+    # the equivalent of the 'default' case below (minus the 'lift_combiners'
+    # part).
     pre_optimize = options.view_as(DebugOptions).lookup_experiment(
-        'pre_optimize', 'lift_combiners').lower()
-    if not options.view_as(StandardOptions).streaming:
-      flink_known_urns = frozenset([
-          common_urns.composites.RESHUFFLE.urn,
-          common_urns.primitives.IMPULSE.urn,
-          common_urns.primitives.FLATTEN.urn,
-          common_urns.primitives.GROUP_BY_KEY.urn
-      ])
-      if pre_optimize == 'none':
-        pass
+        'pre_optimize', 'default').lower()
+    if (not options.view_as(StandardOptions).streaming and
+        pre_optimize != 'none'):
+      if pre_optimize == 'default':
+        phases = [
+            # TODO: https://issues.apache.org/jira/browse/BEAM-4678
+            #       https://issues.apache.org/jira/browse/BEAM-11478
+            # Eventually remove the 'lift_combiners' phase from 'default'.
+            translations.lift_combiners,
+            translations.sort_stages
+        ]
+        partial = True
       elif pre_optimize == 'all':
-        proto_pipeline = translations.optimize_pipeline(
-            proto_pipeline,
-            phases=[
-                translations.annotate_downstream_side_inputs,
-                translations.annotate_stateful_dofns_as_roots,
-                translations.fix_side_input_pcoll_coders,
-                translations.eliminate_common_key_with_none,
-                translations.pack_combiners,
-                translations.lift_combiners,
-                translations.expand_sdf,
-                translations.fix_flatten_coders,
-                # fn_api_runner_transforms.sink_flattens,
-                translations.greedily_fuse,
-                translations.read_to_impulse,
-                translations.extract_impulse_stages,
-                translations.remove_data_plane_ops,
-                translations.sort_stages
-            ],
-            known_runner_urns=flink_known_urns)
+        phases = [
+            translations.annotate_downstream_side_inputs,
+            translations.annotate_stateful_dofns_as_roots,
+            translations.fix_side_input_pcoll_coders,
+            # TODO(BEAM-11715): Enable translations.pack_combiners.
+            # translations.pack_combiners,
+            translations.lift_combiners,
+            translations.expand_sdf,
+            translations.fix_flatten_coders,
+            # translations.sink_flattens,
+            translations.greedily_fuse,
+            translations.read_to_impulse,
+            translations.extract_impulse_stages,
+            translations.remove_data_plane_ops,
+            translations.sort_stages
+        ]
+        partial = False
+      elif pre_optimize == 'all_except_fusion':
+        # TODO(BEAM-7248): Delete this branch after PortableRunner supports
+        # beam:runner:executable_stage:v1.
+        phases = [
+            translations.annotate_downstream_side_inputs,
+            translations.annotate_stateful_dofns_as_roots,
+            translations.fix_side_input_pcoll_coders,
+            # TODO(BEAM-11715): Enable translations.pack_combiners.
+            # translations.pack_combiners,
+            translations.lift_combiners,
+            translations.expand_sdf,
+            translations.fix_flatten_coders,
+            # translations.sink_flattens,
+            # translations.greedily_fuse,
+            translations.read_to_impulse,
+            translations.extract_impulse_stages,
+            translations.remove_data_plane_ops,
+            translations.sort_stages
+        ]
+        partial = True
       else:
         phases = []
         for phase_name in pre_optimize.split(','):
           # For now, these are all we allow.
-          if phase_name in 'lift_combiners':
+          if phase_name in ('pack_combiners', 'lift_combiners'):
             phases.append(getattr(translations, phase_name))
           else:
             raise ValueError(
                 'Unknown or inapplicable phase for pre_optimize: %s' %
                 phase_name)
-        proto_pipeline = translations.optimize_pipeline(
-            proto_pipeline,
-            phases=phases,
-            known_runner_urns=flink_known_urns,
-            partial=True)
+        phases.append(translations.sort_stages)
+        partial = True
+
+      # All (known) portable runners (ie Flink and Spark) support these URNs.
+      known_urns = frozenset([
+          common_urns.composites.RESHUFFLE.urn,
+          common_urns.primitives.IMPULSE.urn,
+          common_urns.primitives.FLATTEN.urn,
+          common_urns.primitives.GROUP_BY_KEY.urn
+      ])
+      proto_pipeline = translations.optimize_pipeline(
+          proto_pipeline,
+          phases=phases,
+          known_runner_urns=known_urns,
+          partial=partial)
+
     return proto_pipeline
 
   def run_pipeline(self, pipeline, options):

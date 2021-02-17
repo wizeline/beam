@@ -27,6 +27,7 @@ import org.apache.beam.sdk.extensions.sql.meta.Table;
 import org.apache.beam.sdk.extensions.sql.meta.provider.InMemoryMetaTableProvider;
 import org.apache.beam.sdk.extensions.sql.meta.provider.TableProvider;
 import org.apache.beam.sdk.schemas.Schema;
+import org.apache.beam.sdk.schemas.io.payloads.PayloadSerializers;
 
 /**
  * Kafka table provider.
@@ -45,14 +46,6 @@ import org.apache.beam.sdk.schemas.Schema;
  */
 @AutoService(TableProvider.class)
 public class KafkaTableProvider extends InMemoryMetaTableProvider {
-
-  private enum PayloadFormat {
-    CSV,
-    AVRO,
-    JSON,
-    PROTO
-  }
-
   @Override
   public BeamSqlTable buildBeamSqlTable(Table table) {
     Schema schema = table.getSchema();
@@ -65,29 +58,22 @@ public class KafkaTableProvider extends InMemoryMetaTableProvider {
       topics.add(topic.toString());
     }
 
-    PayloadFormat payloadFormat =
-        properties.containsKey("format")
-            ? PayloadFormat.valueOf(properties.getString("format").toUpperCase())
-            : PayloadFormat.CSV;
-
-    switch (payloadFormat) {
-      case CSV:
-        return new BeamKafkaCSVTable(schema, bootstrapServers, topics);
-      case AVRO:
-        return new BeamKafkaAvroTable(schema, bootstrapServers, topics);
-      case JSON:
-        return new BeamKafkaJsonTable(schema, bootstrapServers, topics);
-      case PROTO:
-        String protoClassName = properties.getString("protoClass");
-        try {
-          Class<?> protoClass = Class.forName(protoClassName);
-          return new BeamKafkaProtoTable(schema, bootstrapServers, topics, protoClass);
-        } catch (ClassNotFoundException e) {
-          throw new IllegalArgumentException("Incorrect proto class provided: " + protoClassName);
-        }
-      default:
-        throw new IllegalArgumentException("Unsupported payload format: " + payloadFormat);
+    String payloadFormat =
+        properties.containsKey("format") ? properties.getString("format") : "csv";
+    /*
+     * CSV is handled separately because multiple rows can be produced from a single message, which
+     * adds complexity to payload extraction. It remains here and as the default because it is the
+     * historical default, but it will not be extended to support attaching extended attributes to
+     * rows.
+     */
+    if (payloadFormat.equals("csv")) {
+      return new BeamKafkaCSVTable(schema, bootstrapServers, topics);
     }
+    return new PayloadSerializerKafkaTable(
+        schema,
+        bootstrapServers,
+        topics,
+        PayloadSerializers.getSerializer(payloadFormat, schema, properties.getInnerMap()));
   }
 
   @Override

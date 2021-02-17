@@ -20,9 +20,11 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import collections
+import gc
 import logging
 import os
 import random
+import shutil
 import sys
 import tempfile
 import threading
@@ -45,6 +47,7 @@ from tenacity import retry
 from tenacity import stop_after_attempt
 
 import apache_beam as beam
+from apache_beam.coders import coders
 from apache_beam.coders.coders import StrUtf8Coder
 from apache_beam.io import restriction_trackers
 from apache_beam.io.watermark_estimators import ManualWatermarkEstimator
@@ -492,6 +495,30 @@ class FnApiRunnerTest(unittest.TestCase):
 
       assert_that(actual, is_buffered_correctly)
 
+  def test_pardo_dynamic_timer(self):
+    class DynamicTimerDoFn(beam.DoFn):
+      dynamic_timer_spec = userstate.TimerSpec(
+          'dynamic_timer', userstate.TimeDomain.WATERMARK)
+
+      def process(
+          self, element,
+          dynamic_timer=beam.DoFn.TimerParam(dynamic_timer_spec)):
+        dynamic_timer.set(element[1], dynamic_timer_tag=element[0])
+
+      @userstate.on_timer(dynamic_timer_spec)
+      def dynamic_timer_callback(
+          self,
+          tag=beam.DoFn.DynamicTimerTagParam,
+          timestamp=beam.DoFn.TimestampParam):
+        yield (tag, timestamp)
+
+    with self.create_pipeline() as p:
+      actual = (
+          p
+          | beam.Create([('key1', 10), ('key2', 20), ('key3', 30)])
+          | beam.ParDo(DynamicTimerDoFn()))
+      assert_that(actual, equal_to([('key1', 10), ('key2', 20), ('key3', 30)]))
+
   def test_sdf(self):
     class ExpandingStringsDoFn(beam.DoFn):
       def process(
@@ -499,6 +526,21 @@ class FnApiRunnerTest(unittest.TestCase):
           element,
           restriction_tracker=beam.DoFn.RestrictionParam(
               ExpandStringsProvider())):
+        assert isinstance(restriction_tracker, RestrictionTrackerView)
+        cur = restriction_tracker.current_restriction().start
+        while restriction_tracker.try_claim(cur):
+          yield element[cur]
+          cur += 1
+
+    with self.create_pipeline() as p:
+      data = ['abc', 'defghijklmno', 'pqrstuv', 'wxyz']
+      actual = (p | beam.Create(data) | beam.ParDo(ExpandingStringsDoFn()))
+      assert_that(actual, equal_to(list(''.join(data))))
+
+  def test_sdf_with_dofn_as_restriction_provider(self):
+    class ExpandingStringsDoFn(beam.DoFn, ExpandStringsProvider):
+      def process(
+          self, element, restriction_tracker=beam.DoFn.RestrictionParam()):
         assert isinstance(restriction_tracker, RestrictionTrackerView)
         cur = restriction_tracker.current_restriction().start
         while restriction_tracker.try_claim(cur):
@@ -531,6 +573,38 @@ class FnApiRunnerTest(unittest.TestCase):
 
   def test_sdf_with_watermark_tracking(self):
     class ExpandingStringsDoFn(beam.DoFn):
+      def process(
+          self,
+          element,
+          restriction_tracker=beam.DoFn.RestrictionParam(
+              ExpandStringsProvider()),
+          watermark_estimator=beam.DoFn.WatermarkEstimatorParam(
+              ManualWatermarkEstimator.default_provider())):
+        cur = restriction_tracker.current_restriction().start
+        while restriction_tracker.try_claim(cur):
+          watermark_estimator.set_watermark(timestamp.Timestamp(cur))
+          assert (
+              watermark_estimator.current_watermark() == timestamp.Timestamp(
+                  cur))
+          yield element[cur]
+          if cur % 2 == 1:
+            restriction_tracker.defer_remainder(timestamp.Duration(micros=5))
+            return
+          cur += 1
+
+    with self.create_pipeline() as p:
+      data = ['abc', 'defghijklmno', 'pqrstuv', 'wxyz']
+      actual = (p | beam.Create(data) | beam.ParDo(ExpandingStringsDoFn()))
+      assert_that(actual, equal_to(list(''.join(data))))
+
+  def test_sdf_with_dofn_as_watermark_estimator(self):
+    class ExpandingStringsDoFn(beam.DoFn, beam.WatermarkEstimatorProvider):
+      def initial_estimator_state(self, element, restriction):
+        return None
+
+      def create_watermark_estimator(self, state):
+        return beam.io.watermark_estimators.ManualWatermarkEstimator(state)
+
       def process(
           self,
           element,
@@ -708,6 +782,21 @@ class FnApiRunnerTest(unittest.TestCase):
           | beam.Map(lambda k_vs1: (k_vs1[0], sorted(k_vs1[1]))))
       assert_that(res, equal_to([('k', [1, 2]), ('k', [100, 101, 102])]))
 
+  def test_custom_merging_window(self):
+    with self.create_pipeline() as p:
+      res = (
+          p
+          | beam.Create([1, 2, 100, 101, 102])
+          | beam.Map(lambda t: window.TimestampedValue(('k', t), t))
+          | beam.WindowInto(CustomMergingWindowFn())
+          | beam.GroupByKey()
+          | beam.Map(lambda k_vs1: (k_vs1[0], sorted(k_vs1[1]))))
+      assert_that(
+          res, equal_to([('k', [1]), ('k', [101]), ('k', [2, 100, 102])]))
+    gc.collect()
+    from apache_beam.runners.portability.fn_api_runner.execution import GenericMergingWindowFn
+    self.assertEqual(GenericMergingWindowFn._HANDLES, {})
+
   @unittest.skip('BEAM-9119: test is flaky')
   def test_large_elements(self):
     with self.create_pipeline() as p:
@@ -834,21 +923,19 @@ class FnApiRunnerTest(unittest.TestCase):
       assert_that(res, equal_to(['1', '2']))
 
   def test_register_finalizations(self):
+    event_recorder = EventRecorder(tempfile.gettempdir())
+
     class FinalizableSplittableDoFn(beam.DoFn):
-      was_finalized = False
-
-      def set_finalized(self):
-        self.was_finalized = True
-
       def process(
           self,
           element,
           bundle_finalizer=beam.DoFn.BundleFinalizerParam,
           restriction_tracker=beam.DoFn.RestrictionParam(
-              OffsetRangeProvider(use_bounded_offset_range=True))):
+              OffsetRangeProvider(
+                  use_bounded_offset_range=True, checkpoint_only=True))):
         # We use SDF to enforce finalization call happens by using
         # self-initiated checkpoint.
-        if self.was_finalized:
+        if 'finalized' in event_recorder.events():
           restriction_tracker.try_claim(
               restriction_tracker.current_restriction().start)
           yield element
@@ -856,7 +943,7 @@ class FnApiRunnerTest(unittest.TestCase):
           return
         if restriction_tracker.try_claim(
             restriction_tracker.current_restriction().start):
-          bundle_finalizer.register(lambda: self.set_finalized())
+          bundle_finalizer.register(lambda: event_recorder.record('finalized'))
           # We sleep here instead of setting a resume time since the resume time
           # doesn't need to be honored.
           time.sleep(1)
@@ -869,6 +956,8 @@ class FnApiRunnerTest(unittest.TestCase):
           | beam.Create([max_retries])
           | beam.ParDo(FinalizableSplittableDoFn()))
       assert_that(res, equal_to([max_retries]))
+
+    event_recorder.cleanup()
 
   def test_sdf_synthetic_source(self):
     common_attrs = {
@@ -914,6 +1003,58 @@ class FnApiRunnerTest(unittest.TestCase):
 
     with self.create_pipeline() as p:
       assert_that(p | beam.Create(['a', 'b']), equal_to(['a', 'b']))
+
+  def _test_pack_combiners(self, experiments, expect_packed):
+    counter = beam.metrics.Metrics.counter('ns', 'num_values')
+
+    def min_with_counter(values):
+      counter.inc()
+      return min(values)
+
+    def max_with_counter(values):
+      counter.inc()
+      return max(values)
+
+    with self.create_pipeline() as p:
+      for experiment in experiments:
+        p._options.view_as(DebugOptions).add_experiment(experiment)
+      pcoll = p | beam.Create([10, 20, 30])
+      assert_that(
+          pcoll | 'PackableMin' >> beam.CombineGlobally(min_with_counter),
+          equal_to([10]),
+          label='AssertMin')
+      assert_that(
+          pcoll | 'PackableMax' >> beam.CombineGlobally(max_with_counter),
+          equal_to([30]),
+          label='AssertMax')
+
+    res = p.run()
+    res.wait_until_finish()
+
+    unpacked_min_step_name = 'PackableMin/CombinePerKey'
+    unpacked_max_step_name = 'PackableMax/CombinePerKey'
+    packed_step_name = (
+        'Packed[PackableMin/CombinePerKey, PackableMax/CombinePerKey]/' +
+        'Pack')
+
+    counters = res.metrics().query(beam.metrics.MetricsFilter())['counters']
+    step_names = set(m.key.step for m in counters)
+    if expect_packed:
+      self.assertFalse(any([unpacked_min_step_name in s for s in step_names]))
+      self.assertFalse(any([unpacked_max_step_name in s for s in step_names]))
+      self.assertTrue(any([packed_step_name in s for s in step_names]))
+    else:
+      self.assertTrue(any([unpacked_min_step_name in s for s in step_names]))
+      self.assertTrue(any([unpacked_max_step_name in s for s in step_names]))
+      self.assertFalse(any([packed_step_name in s for s in step_names]))
+
+  def test_pack_combiners_disabled_by_default(self):
+    self._test_pack_combiners(experiments=(), expect_packed=False)
+
+  @unittest.skip("BEAM-11694")
+  def test_pack_combiners_enabled_by_experiment(self):
+    self._test_pack_combiners(
+        experiments=('pre_optimize=all', ), expect_packed=True)
 
 
 # These tests are kept in a separate group so that they are
@@ -1348,6 +1489,9 @@ class FnApiRunnerTestWithMultiWorkers(FnApiRunnerTest):
   def test_sdf_with_watermark_tracking(self):
     raise unittest.SkipTest("This test is for a single worker only.")
 
+  def test_sdf_with_dofn_as_watermark_estimator(self):
+    raise unittest.SkipTest("This test is for a single worker only.")
+
   def test_register_finalizations(self):
     raise unittest.SkipTest("This test is for a single worker only.")
 
@@ -1373,6 +1517,9 @@ class FnApiRunnerTestWithGrpcAndMultiWorkers(FnApiRunnerTest):
     raise unittest.SkipTest("This test is for a single worker only.")
 
   def test_sdf_with_watermark_tracking(self):
+    raise unittest.SkipTest("This test is for a single worker only.")
+
+  def test_sdf_with_dofn_as_watermark_estimator(self):
     raise unittest.SkipTest("This test is for a single worker only.")
 
   def test_register_finalizations(self):
@@ -1411,6 +1558,9 @@ class FnApiRunnerTestWithBundleRepeatAndMultiWorkers(FnApiRunnerTest):
     raise unittest.SkipTest("This test is for a single worker only.")
 
   def test_sdf_with_watermark_tracking(self):
+    raise unittest.SkipTest("This test is for a single worker only.")
+
+  def test_sdf_with_dofn_as_watermark_estimator(self):
     raise unittest.SkipTest("This test is for a single worker only.")
 
 
@@ -1707,6 +1857,36 @@ def _unpickle_element_counter(name):
   return _pickled_element_counters[name]
 
 
+class EventRecorder(object):
+  """Used to be registered as a callback in bundle finalization.
+
+  The reason why records are written into a tmp file is, the in-memory dataset
+  cannot keep callback records when passing into one DoFn.
+  """
+  def __init__(self, tmp_dir):
+    self.tmp_dir = os.path.join(tmp_dir, uuid.uuid4().hex)
+    os.mkdir(self.tmp_dir)
+
+  def record(self, content):
+    file_path = os.path.join(self.tmp_dir, uuid.uuid4().hex + '.txt')
+    with open(file_path, 'w') as f:
+      f.write(content)
+
+  def events(self):
+    content = []
+    record_files = [
+        f for f in os.listdir(self.tmp_dir)
+        if os.path.isfile(os.path.join(self.tmp_dir, f))
+    ]
+    for file in record_files:
+      with open(os.path.join(self.tmp_dir, file), 'r') as f:
+        content.append(f.read())
+    return sorted(content)
+
+  def cleanup(self):
+    shutil.rmtree(self.tmp_dir)
+
+
 class ExpandStringsProvider(beam.transforms.core.RestrictionProvider):
   """A RestrictionProvider that used for sdf related tests."""
   def initial_restriction(self, element):
@@ -1730,13 +1910,23 @@ class UnboundedOffsetRestrictionTracker(
 
 
 class OffsetRangeProvider(beam.transforms.core.RestrictionProvider):
-  def __init__(self, use_bounded_offset_range):
+  def __init__(self, use_bounded_offset_range, checkpoint_only=False):
     self.use_bounded_offset_range = use_bounded_offset_range
+    self.checkpoint_only = checkpoint_only
 
   def initial_restriction(self, element):
     return restriction_trackers.OffsetRange(0, element)
 
   def create_tracker(self, restriction):
+    if self.checkpoint_only:
+
+      class CheckpointOnlyOffsetRestrictionTracker(
+          restriction_trackers.OffsetRestrictionTracker):
+        def try_split(self, unused_fraction_of_remainder):
+          return super(CheckpointOnlyOffsetRestrictionTracker,
+                       self).try_split(0.0)
+
+      return CheckpointOnlyOffsetRestrictionTracker(restriction)
     if self.use_bounded_offset_range:
       return restriction_trackers.OffsetRestrictionTracker(restriction)
     return UnboundedOffsetRestrictionTracker(restriction)
@@ -1827,6 +2017,26 @@ class FnApiBasedStateBackedCoderTest(unittest.TestCase):
           | beam.MapTuple(lambda _, vs: sum(e.num_elements for e in vs)))
 
       assert_that(r, equal_to([VALUES_PER_ELEMENT * NUM_OF_ELEMENTS]))
+
+
+# TODO(robertwb): Why does pickling break when this is inlined?
+class CustomMergingWindowFn(window.WindowFn):
+  def assign(self, assign_context):
+    return [
+        window.IntervalWindow(
+            assign_context.timestamp, assign_context.timestamp + 1)
+    ]
+
+  def merge(self, merge_context):
+    evens = [w for w in merge_context.windows if w.start % 2 == 0]
+    if evens:
+      merge_context.merge(
+          evens,
+          window.IntervalWindow(
+              min(w.start for w in evens), max(w.end for w in evens)))
+
+  def get_window_coder(self):
+    return coders.IntervalWindowCoder()
 
 
 if __name__ == '__main__':

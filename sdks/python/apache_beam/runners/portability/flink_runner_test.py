@@ -57,7 +57,7 @@ from apache_beam.transforms.sql import SqlTransform
 # Run as
 #
 # pytest flink_runner_test.py[::TestClass::test_case] \
-#     --test-pipeline-options "--environment_type=LOOPBACK"
+#     --test-pipeline-options="--environment_type=LOOPBACK"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -238,7 +238,8 @@ class FlinkRunnerTest(portable_runner_test.PortableRunnerTest):
             p
             | ReadFromKafka(
                 consumer_config={
-                    'bootstrap.servers': 'notvalid1:7777, notvalid2:3531'
+                    'bootstrap.servers': 'notvalid1:7777, notvalid2:3531',
+                    'group.id': 'any_group'
                 },
                 topics=['topic1', 'topic2'],
                 key_deserializer='org.apache.kafka.'
@@ -247,6 +248,8 @@ class FlinkRunnerTest(portable_runner_test.PortableRunnerTest):
                 value_deserializer='org.apache.kafka.'
                 'common.serialization.'
                 'LongDeserializer',
+                commit_offset_in_finalize=True,
+                timestamp_policy=ReadFromKafka.create_time_policy,
                 expansion_service=self.get_expansion_service()))
     self.assertTrue(
         'No resolvable bootstrap urls given in bootstrap.servers' in str(
@@ -395,6 +398,9 @@ class FlinkRunnerTest(portable_runner_test.PortableRunnerTest):
   def test_register_finalizations(self):
     raise unittest.SkipTest("BEAM-11021")
 
+  def test_custom_merging_window(self):
+    raise unittest.SkipTest("BEAM-11004")
+
   # Inherits all other tests.
 
 
@@ -419,6 +425,11 @@ class FlinkRunnerTestOptimized(FlinkRunnerTest):
 
   def test_sql(self):
     raise unittest.SkipTest("BEAM-7252")
+
+  def test_pack_combiners_disabled_by_default(self):
+    raise unittest.SkipTest(
+        "Base test has expectations on counter names that fail because "
+        "stage fusion modifies counter names")
 
 
 class FlinkRunnerTestStreaming(FlinkRunnerTest):

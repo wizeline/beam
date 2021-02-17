@@ -143,11 +143,11 @@ REQUIRED_PACKAGES = [
     'hdfs>=2.1.0,<3.0.0',
     'httplib2>=0.8,<0.18.0',
     'mock>=1.0.1,<3.0.0',
-    'numpy>=1.14.3,<2',
+    'numpy>=1.14.3,<1.21.0',
     'pymongo>=3.8.0,<4.0.0',
     'oauth2client>=2.0.1,<5',
     'protobuf>=3.12.2,<4',
-    'pyarrow>=0.15.1,<3.0.0',
+    'pyarrow>=0.15.1,<4.0.0',
     'pydot>=1.2.0,<2',
     'python-dateutil>=2.8.0,<3',
     'pytz>=2018.3',
@@ -165,7 +165,7 @@ REQUIRED_TEST_PACKAGES = [
     'freezegun>=0.3.12',
     'nose>=1.3.7',
     'nose_xunitmp>=0.4.1',
-    'pandas>=1.0,<2',
+    'pandas>=1.0,<1.3.0',
     'parameterized>=0.7.1,<0.8.0',
     'pyhamcrest>=1.9,!=1.10.0,<2.0.0',
     'pyyaml>=3.12,<6.0.0',
@@ -196,14 +196,13 @@ GCP_REQUIREMENTS = [
     'google-cloud-language>=1.3.0,<2',
     'google-cloud-videointelligence>=1.8.0,<2',
     'google-cloud-vision>=0.38.0,<2',
-    # GCP packages required by prebuild sdk container functionality.
-    'google-cloud-build>=2.0.0,<3',
 ]
 
 INTERACTIVE_BEAM = [
     'facets-overview>=1.0.0,<2',
     'ipython>=5.8.0,<8',
     'ipykernel>=5.2.0,<6',
+    'jupyter-client>=6.1.11,<7',
     'timeloop>=1.0.2,<2',
 ]
 
@@ -211,11 +210,10 @@ INTERACTIVE_BEAM_TEST = [
     # notebok utils
     'nbformat>=5.0.5,<6',
     'nbconvert>=5.6.1,<6',
-    'jupyter-client>=6.1.2,<7',
     # headless chrome based integration tests
     'selenium>=3.141.0,<4',
     'needle>=0.5.0,<1',
-    'chromedriver-binary>=86,<87',
+    'chromedriver-binary>=88,<89',
     # use a fixed major version of PIL for different python versions
     'pillow>=7.1.1,<8',
 ]

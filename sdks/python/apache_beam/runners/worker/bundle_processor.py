@@ -76,6 +76,7 @@ from apache_beam.transforms import TimeDomain
 from apache_beam.transforms import core
 from apache_beam.transforms import sideinputs
 from apache_beam.transforms import userstate
+from apache_beam.transforms import window
 from apache_beam.utils import counters
 from apache_beam.utils import proto_utils
 from apache_beam.utils import timestamp
@@ -88,8 +89,8 @@ if TYPE_CHECKING:
   from apache_beam.runners.sdf_utils import SplitResultResidual
   from apache_beam.runners.worker import data_plane
   from apache_beam.runners.worker import sdk_worker
-  from apache_beam.transforms import window
   from apache_beam.transforms.core import Windowing
+  from apache_beam.transforms.window import BoundedWindow
   from apache_beam.utils import windowed_value
 
 # This module is experimental. No backwards-compatibility guarantees.
@@ -381,7 +382,7 @@ class StateBackedSideInputMap(object):
     self._element_coder = coder.wrapped_value_coder
     self._target_window_coder = coder.window_coder
     # TODO(robertwb): Limit the cache size.
-    self._cache = {}  # type: Dict[window.BoundedWindow, Any]
+    self._cache = {}  # type: Dict[BoundedWindow, Any]
 
   def __getitem__(self, window):
     target_window = self._side_input_data.window_mapping_fn(window)
@@ -644,14 +645,14 @@ class SynchronousSetRuntimeState(userstate.SetRuntimeState):
 class OutputTimer(userstate.BaseTimer):
   def __init__(self,
                key,
-               window,  # type: windowed_value.BoundedWindow
+               window,  # type: BoundedWindow
                timestamp,  # type: timestamp.Timestamp
                paneinfo,  # type: windowed_value.PaneInfo
                time_domain, # type: str
                timer_family_id,  # type: str
                timer_coder_impl,  # type: coder_impl.TimerCoderImpl
                output_stream  # type: data_plane.ClosableOutputStream
-              ):
+               ):
     self._key = key
     self._window = window
     self._input_timestamp = timestamp
@@ -661,12 +662,11 @@ class OutputTimer(userstate.BaseTimer):
     self._output_stream = output_stream
     self._timer_coder_impl = timer_coder_impl
 
-  def set(self, ts):
-    # type: (timestamp.TimestampTypes) -> None
+  def set(self, ts: timestamp.TimestampTypes, dynamic_timer_tag='') -> None:
     ts = timestamp.Timestamp.of(ts)
     timer = userstate.Timer(
         user_key=self._key,
-        dynamic_timer_tag='',
+        dynamic_timer_tag=dynamic_timer_tag,
         windows=(self._window, ),
         clear_bit=False,
         fire_timestamp=ts,
@@ -676,11 +676,10 @@ class OutputTimer(userstate.BaseTimer):
     self._timer_coder_impl.encode_to_stream(timer, self._output_stream, True)
     self._output_stream.maybe_flush()
 
-  def clear(self):
-    # type: () -> None
+  def clear(self, dynamic_timer_tag='') -> None:
     timer = userstate.Timer(
         user_key=self._key,
-        dynamic_timer_tag='',
+        dynamic_timer_tag=dynamic_timer_tag,
         windows=(self._window, ),
         clear_bit=True,
         fire_timestamp=None,
@@ -713,10 +712,8 @@ class FnApiUserStateContext(userstate.UserStateContext):
     Args:
       state_handler: A StateServicer object.
       transform_id: The name of the PTransform that this context is associated.
-      key_coder:
-      window_coder:
-      timer_family_specs: A list of ``userstate.TimerSpec`` objects specifying
-        the timers associated with this operation.
+      key_coder: Coder for the key type.
+      window_coder: Coder for the window type.
     """
     self._state_handler = state_handler
     self._transform_id = transform_id
@@ -731,14 +728,11 @@ class FnApiUserStateContext(userstate.UserStateContext):
     self._timers_info[timer_family_id] = timer_info
 
   def get_timer(
-      self,
-      timer_spec,
-      key,
-      window,  # type: windowed_value.BoundedWindow
-      timestamp,
-      pane):
-    # type: (...) -> OutputTimer
+      self, timer_spec: userstate.TimerSpec, key, window, timestamp,
+      pane) -> OutputTimer:
     assert self._timers_info[timer_spec.name].output_stream is not None
+    timer_coder_impl = self._timers_info[timer_spec.name].timer_coder_impl
+    output_stream = self._timers_info[timer_spec.name].output_stream
     return OutputTimer(
         key,
         window,
@@ -746,8 +740,8 @@ class FnApiUserStateContext(userstate.UserStateContext):
         pane,
         timer_spec.time_domain,
         timer_spec.name,
-        self._timers_info[timer_spec.name].timer_coder_impl,
-        self._timers_info[timer_spec.name].output_stream)
+        timer_coder_impl,
+        output_stream)
 
   def get_state(self, *args):
     # type: (*Any) -> FnApiUserRuntimeStateTypes
@@ -759,7 +753,7 @@ class FnApiUserStateContext(userstate.UserStateContext):
   def _create_state(self,
                     state_spec,  # type: userstate.StateSpec
                     key,
-                    window  # type: windowed_value.BoundedWindow
+                    window  # type: BoundedWindow
                    ):
     # type: (...) -> FnApiUserRuntimeStateTypes
     if isinstance(state_spec,
@@ -1861,3 +1855,62 @@ def create_map_windows(
 
   return _create_simple_pardo_operation(
       factory, transform_id, transform_proto, consumers, MapWindows())
+
+
+@BeamTransformFactory.register_urn(
+    common_urns.primitives.MERGE_WINDOWS.urn, beam_runner_api_pb2.FunctionSpec)
+def create_merge_windows(
+    factory,  # type: BeamTransformFactory
+    transform_id,  # type: str
+    transform_proto,  # type: beam_runner_api_pb2.PTransform
+    mapping_fn_spec,  # type: beam_runner_api_pb2.FunctionSpec
+    consumers  # type: Dict[str, List[operations.Operation]]
+):
+  assert mapping_fn_spec.urn == python_urns.PICKLED_WINDOWFN
+  window_fn = pickler.loads(mapping_fn_spec.payload)
+
+  class MergeWindows(beam.DoFn):
+    def process(self, element):
+      nonce, windows = element
+
+      original_windows = set(windows)  # type: Set[window.BoundedWindow]
+      merged_windows = collections.defaultdict(
+          set
+      )  # type: MutableMapping[window.BoundedWindow, Set[window.BoundedWindow]]
+
+      class RecordingMergeContext(window.WindowFn.MergeContext):
+        def merge(
+            self,
+            to_be_merged,  # type: Iterable[window.BoundedWindow]
+            merge_result,  # type: window.BoundedWindow
+          ):
+          originals = merged_windows[merge_result]
+          for window in to_be_merged:
+            if window in original_windows:
+              originals.add(window)
+              original_windows.remove(window)
+            else:
+              originals.update(merged_windows.pop(window))
+
+      window_fn.merge(RecordingMergeContext(windows))
+      yield nonce, (original_windows, merged_windows.items())
+
+  return _create_simple_pardo_operation(
+      factory, transform_id, transform_proto, consumers, MergeWindows())
+
+
+@BeamTransformFactory.register_urn(common_urns.primitives.TO_STRING.urn, None)
+def create_to_string_fn(
+    factory,  # type: BeamTransformFactory
+    transform_id,  # type: str
+    transform_proto,  # type: beam_runner_api_pb2.PTransform
+    mapping_fn_spec,  # type: beam_runner_api_pb2.FunctionSpec
+    consumers  # type: Dict[str, List[operations.Operation]]
+):
+  class ToString(beam.DoFn):
+    def process(self, element):
+      key, value = element
+      return [(key, str(value))]
+
+  return _create_simple_pardo_operation(
+      factory, transform_id, transform_proto, consumers, ToString())

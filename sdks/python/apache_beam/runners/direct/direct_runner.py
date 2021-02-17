@@ -118,8 +118,15 @@ class SwitchingDirectRunner(PipelineRunner):
     # Check whether all transforms used in the pipeline are supported by the
     # FnApiRunner, and the pipeline was not meant to be run as streaming.
     if _FnApiRunnerSupportVisitor().accept(pipeline):
-      from apache_beam.runners.portability.fn_api_runner import FnApiRunner
-      runner = FnApiRunner()
+      from apache_beam.portability.api import beam_provision_api_pb2
+      from apache_beam.runners.portability.fn_api_runner import fn_runner
+      from apache_beam.runners.portability.portable_runner import JobServiceHandle
+      all_options = options.get_all_options()
+      encoded_options = JobServiceHandle.encode_pipeline_options(all_options)
+      provision_info = fn_runner.ExtendedProvisionInfo(
+          beam_provision_api_pb2.ProvisionInfo(
+              pipeline_options=encoded_options))
+      runner = fn_runner.FnApiRunner(provision_info=provision_info)
     else:
       runner = BundleBasedDirectRunner()
 
@@ -472,9 +479,7 @@ def _get_pubsub_transform_overrides(pipeline_options):
 
   class WriteToPubSubOverride(PTransformOverride):
     def matches(self, applied_ptransform):
-      return isinstance(
-          applied_ptransform.transform,
-          (beam_pubsub.WriteToPubSub, beam_pubsub._WriteStringsToPubSub))
+      return isinstance(applied_ptransform.transform, beam_pubsub.WriteToPubSub)
 
     def get_replacement_transform_for_applied_ptransform(
         self, applied_ptransform):

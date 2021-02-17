@@ -1664,6 +1664,7 @@ public class BigQueryIO {
         .setMaxBytesPerPartition(BatchLoads.DEFAULT_MAX_BYTES_PER_PARTITION)
         .setOptimizeWrites(false)
         .setUseBeamSchema(false)
+        .setAutoSharding(false)
         .build();
   }
 
@@ -1789,6 +1790,9 @@ public class BigQueryIO {
     @Experimental(Kind.SCHEMAS)
     abstract Boolean getUseBeamSchema();
 
+    @Experimental
+    abstract Boolean getAutoSharding();
+
     abstract Builder<T> toBuilder();
 
     @AutoValue.Builder
@@ -1868,6 +1872,9 @@ public class BigQueryIO {
       @Experimental(Kind.SCHEMAS)
       abstract Builder<T> setUseBeamSchema(Boolean useBeamSchema);
 
+      @Experimental
+      abstract Builder<T> setAutoSharding(Boolean autoSharding);
+
       abstract Write<T> build();
     }
 
@@ -1935,6 +1942,8 @@ public class BigQueryIO {
 
     /**
      * An enumeration type for the BigQuery schema update options strings.
+     *
+     * <p>Not supported for {@link Method#STREAMING_INSERTS}.
      *
      * <p>Note from the BigQuery API doc -- Schema update options are supported in two cases: when
      * writeDisposition is WRITE_APPEND; when writeDisposition is WRITE_TRUNCATE and the destination
@@ -2180,7 +2189,12 @@ public class BigQueryIO {
       return toBuilder().setWriteDisposition(writeDisposition).build();
     }
 
-    /** Allows the schema of the destination table to be updated as a side effect of the write. */
+    /**
+     * Allows the schema of the destination table to be updated as a side effect of the write.
+     *
+     * <p>This configuration applies only when writing to BigQuery with {@link Method#FILE_LOADS} as
+     * method.
+     */
     public Write<T> withSchemaUpdateOptions(Set<SchemaUpdateOption> schemaUpdateOptions) {
       checkArgument(schemaUpdateOptions != null, "schemaUpdateOptions can not be null");
       return toBuilder().setSchemaUpdateOptions(schemaUpdateOptions).build();
@@ -2253,7 +2267,8 @@ public class BigQueryIO {
 
     /**
      * Control how many file shards are written when using BigQuery load jobs. Applicable only when
-     * also setting {@link #withTriggeringFrequency}.
+     * also setting {@link #withTriggeringFrequency}. To let runner determine the sharding at
+     * runtime, set {@link #withAutoSharding()} instead.
      */
     public Write<T> withNumFileShards(int numFileShards) {
       checkArgument(numFileShards > 0, "numFileShards must be > 0, but was: %s", numFileShards);
@@ -2333,6 +2348,17 @@ public class BigQueryIO {
     @Experimental(Kind.SCHEMAS)
     public Write<T> useBeamSchema() {
       return toBuilder().setUseBeamSchema(true).build();
+    }
+
+    /**
+     * If true, enables using a dynamically determined number of shards to write to BigQuery. This
+     * can be used for both {@link Method#FILE_LOADS} and {@link Method#STREAMING_INSERTS}. Only
+     * applicable to unbounded data. If using {@link Method#FILE_LOADS}, numFileShards set via
+     * {@link #withNumFileShards} will be ignored.
+     */
+    @Experimental
+    public Write<T> withAutoSharding() {
+      return toBuilder().setAutoSharding(true).build();
     }
 
     @VisibleForTesting
@@ -2478,6 +2504,10 @@ public class BigQueryIO {
             "Writing avro formatted data is only supported for FILE_LOADS, however "
                 + "the method was %s",
             method);
+      }
+
+      if (input.isBounded() == IsBounded.BOUNDED) {
+        checkArgument(!getAutoSharding(), "Auto-sharding is only applicable to unbounded input.");
       }
 
       if (getJsonTimePartitioning() != null) {
@@ -2654,6 +2684,9 @@ public class BigQueryIO {
         checkArgument(
             rowWriterFactory.getOutputType() == RowWriterFactory.OutputType.JsonTableRow,
             "Avro output is not supported when method == STREAMING_INSERTS");
+        checkArgument(
+            getSchemaUpdateOptions() == null || getSchemaUpdateOptions().isEmpty(),
+            "SchemaUpdateOptions are not supported when method == STREAMING_INSERTS");
 
         RowWriterFactory.TableRowWriterFactory<ElementT, DestinationT> tableRowWriterFactory =
             (RowWriterFactory.TableRowWriterFactory<ElementT, DestinationT>) rowWriterFactory;
@@ -2671,6 +2704,7 @@ public class BigQueryIO {
                 .withSkipInvalidRows(getSkipInvalidRows())
                 .withIgnoreUnknownValues(getIgnoreUnknownValues())
                 .withIgnoreInsertIds(getIgnoreInsertIds())
+                .withAutoSharding(getAutoSharding())
                 .withKmsKey(getKmsKey());
         return input.apply(streamingInserts);
       } else {
@@ -2718,7 +2752,11 @@ public class BigQueryIO {
           batchLoads.setMaxRetryJobs(1000);
         }
         batchLoads.setTriggeringFrequency(getTriggeringFrequency());
-        batchLoads.setNumFileShards(getNumFileShards());
+        if (getAutoSharding()) {
+          batchLoads.setNumFileShards(0);
+        } else {
+          batchLoads.setNumFileShards(getNumFileShards());
+        }
         return input.apply(batchLoads);
       }
     }

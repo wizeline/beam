@@ -77,6 +77,7 @@ public class PTransformTranslation {
   public static final String TEST_STREAM_TRANSFORM_URN = "beam:transform:teststream:v1";
   public static final String MAP_WINDOWS_TRANSFORM_URN = "beam:transform:map_windows:v1";
   public static final String MERGE_WINDOWS_TRANSFORM_URN = "beam:transform:merge_windows:v1";
+  public static final String TO_STRING_TRANSFORM_URN = "beam:transform:to_string:v1";
 
   // Required runner implemented transforms. These transforms should never specify an environment.
   public static final ImmutableSet<String> RUNNER_IMPLEMENTED_TRANSFORMS =
@@ -101,6 +102,8 @@ public class PTransformTranslation {
   public static final String COMBINE_GLOBALLY_TRANSFORM_URN = "beam:transform:combine_globally:v1";
   public static final String RESHUFFLE_URN = "beam:transform:reshuffle:v1";
   public static final String WRITE_FILES_TRANSFORM_URN = "beam:transform:write_files:v1";
+  public static final String GROUP_INTO_BATCHES_WITH_SHARDED_KEY_URN =
+      "beam:transform:group_into_batches_with_sharded_key:v1";
 
   // CombineComponents
   public static final String COMBINE_PER_KEY_PRECOMBINE_TRANSFORM_URN =
@@ -138,6 +141,9 @@ public class PTransformTranslation {
       "beam:transform:sdf_split_and_size_restrictions:v1";
   public static final String SPLITTABLE_PROCESS_SIZED_ELEMENTS_AND_RESTRICTIONS_URN =
       "beam:transform:sdf_process_sized_element_and_restrictions:v1";
+
+  // GroupIntoBatchesComponents
+  public static final String GROUP_INTO_BATCHES_URN = "beam:transform:group_into_batches:v1";
 
   static {
     // Primitives
